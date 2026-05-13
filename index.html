@@ -193,7 +193,7 @@ let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
 const LS = 'gigi_shop_v3';
 let S = {
-  inventario:[], listagem:[], gastos:[],
+  inventario:[], listagem:[], gastos:[], insumos:[],
   config:{
     categorias:['Eletrônicos','Roupas','Calçados','Acessórios','Decoração','Brinquedos','Geral'],
     locaisCompra:['State Sale','Goodwill','Próprio','Salvation Army','Outros'],
@@ -204,7 +204,7 @@ let S = {
     statusItem:['Em Estoque','Listado'],
   }
 };
-let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente';
+let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos';
 try{ const s=localStorage.getItem(LS); if(s) S=JSON.parse(s); }catch(e){}
 function saveL(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
 
@@ -264,10 +264,11 @@ async function syncFromSupabase(){
   if(!SB_URL||!SB_KEY) return;
   setSyncUI('syncing','lendo');
   try{
-    const [invRaw, lstRaw, gastosRaw, cfgRaw] = await Promise.all([
+    const [invRaw, lstRaw, gastosRaw, insumosRaw, cfgRaw] = await Promise.all([
       sbGet('inventario','select=*&order=created_at.asc'),
       sbGet('listagem','select=*&order=created_at.asc'),
       sbGet('gastos','select=*&order=data.desc'),
+      sbGet('insumos','select=*&order=nome.asc'),
       sbGet('config','select=*'),
     ]);
 
@@ -282,6 +283,7 @@ async function syncFromSupabase(){
     S.listagem=Object.values(lstMap);
 
     S.gastos=gastosRaw||[];
+    S.insumos=insumosRaw||[];
 
     // Config stored as key-value rows
     if(cfgRaw&&cfgRaw.length){
@@ -309,6 +311,13 @@ async function pushDeleteGasto(id){
   if(!SB_URL||!SB_KEY) return;
   setSyncUI('syncing','salvando');
   try{ await sbDelete('gastos','id',id); setSyncUI('ok','salvo'); }
+  catch(e){ setSyncUI('error','erro'); }
+}
+async function pushUpsertInsumo(i){ await pushUpsert('insumos',i); }
+async function pushDeleteInsumo(id){
+  if(!SB_URL||!SB_KEY) return;
+  setSyncUI('syncing','salvando');
+  try{ await sbDelete('insumos','id',id); setSyncUI('ok','salvo'); }
   catch(e){ setSyncUI('error','erro'); }
 }
 async function pushDelete(table, id){
@@ -346,6 +355,13 @@ function cleanDate(v){
 }
 function fm(v){ return '$'+(parseFloat(v)||0).toFixed(2); }
 function getVV(sku){ const l=S.listagem.find(l=>l.sku===sku&&l.status==='Vendido'); return l?parseFloat(l.valorVendido)||0:0; }
+function getEmb(sku){ const l=S.listagem.find(l=>l.sku===sku&&l.status==='Vendido'); return l?parseFloat(l.custoEmbalagem)||0:0; }
+function getEmbNome(sku){
+  const l=S.listagem.find(l=>l.sku===sku&&l.status==='Vendido');
+  if(!l||!l.embalagemId) return '';
+  const ins=S.insumos.find(i=>i.id===l.embalagemId);
+  return ins?ins.nome:'';
+}
 function getSV(sku){
   const ls=S.listagem.filter(l=>l.sku===sku);
   if(!ls.length) return '';
@@ -365,7 +381,10 @@ function go(t){
 function fabAction(){
   if(tab==='inventario') openInvModal();
   else if(tab==='listagem') openLstModal();
-  else if(tab==='gastos') openGastoModal();
+  else if(tab==='gastos'){
+    if(gastosTab==='insumos') openInsumoModal();
+    else openGastoModal();
+  }
 }
 
 // ── RENDER ────────────────────────────────────────────────
@@ -412,11 +431,16 @@ function saveSupabaseConfig(){
 // ── DASHBOARD ─────────────────────────────────────────────
 function renderDash(){
   const inv=S.inventario, lst=S.listagem;
-  const totalPago=inv.reduce((s,i)=>s+(parseFloat(i.valorPago)||0),0);
+  const totalMercadoria=inv.reduce((s,i)=>s+(parseFloat(i.valorPago)||0),0);
+  const totalFixos=S.gastos.filter(g=>g.categoria==='fixo'||!g.categoria).reduce((s,g)=>s+(parseFloat(g.valor)||0),0);
+  const totalInsumos=S.gastos.filter(g=>g.categoria==='insumo').reduce((s,g)=>s+(parseFloat(g.valor)||0),0);
+  const totalInvestido=totalMercadoria+totalFixos+totalInsumos;
   const vends=inv.filter(i=>getSV(i.sku)==='Vendido');
   const totalVV=vends.reduce((s,i)=>s+getVV(i.sku),0);
-  const lucroTotal=totalVV-vends.reduce((s,i)=>s+(parseFloat(i.valorPago)||0),0);
-  const mgs=vends.map(i=>{ const p=parseFloat(i.valorPago)||0; return p?(getVV(i.sku)-p)/p*100:0; });
+  const totalEmb=vends.reduce((s,i)=>s+getEmb(i.sku),0);
+  const totalPagoVend=vends.reduce((s,i)=>s+(parseFloat(i.valorPago)||0),0);
+  const lucroTotal=totalVV-totalPagoVend-totalEmb;
+  const mgs=vends.map(i=>{ const p=parseFloat(i.valorPago)||0; const e=getEmb(i.sku); return p?(getVV(i.sku)-p-e)/p*100:0; });
   const mg=mgs.length?mgs.reduce((a,b)=>a+b,0)/mgs.length:0;
 
   // Estimativa por plataforma: pega o MAIOR valor entre as listagens ativas de um mesmo SKU
@@ -445,7 +469,7 @@ function renderDash(){
   const totV=inv.filter(i=>getSV(i.sku)==='Vendido').length;
   // Deduplicate vends by SKU (in case of leftover duplicates in state)
   const vendsUniq=Object.values(Object.fromEntries(vends.map(i=>[i.sku,i])));
-  const top5=[...vendsUniq].map(i=>({...i,lucro:getVV(i.sku)-(parseFloat(i.valorPago)||0)}))
+  const top5=[...vendsUniq].map(i=>({...i,lucro:getVV(i.sku)-(parseFloat(i.valorPago)||0)-getEmb(i.sku)}))
     .sort((a,b)=>b.lucro-a.lucro).slice(0,5);
 
   return `
@@ -454,9 +478,13 @@ function renderDash(){
       <button class="btn btn-sm" onclick="syncFromSupabase()">↻ Atualizar</button>
     </div>
     <div class="mgrid">
-      <div class="metric"><div class="mlbl">Total investido</div><div class="mval">${fm(totalPago)}</div></div>
+      <div class="metric"><div class="mlbl">Total investido</div><div class="mval">${fm(totalInvestido)}</div><div class="msub">Mercadoria + fixos + insumos</div></div>
+      <div class="metric"><div class="mlbl">Total em mercadoria</div><div class="mval">${fm(totalMercadoria)}</div><div class="msub">${inv.length} ${inv.length===1?'peça':'peças'}</div></div>
+      <div class="metric"><div class="mlbl">Custos fixos</div><div class="mval" style="color:var(--coral-400)">${fm(totalFixos)}</div></div>
+      <div class="metric"><div class="mlbl">Insumos</div><div class="mval" style="color:var(--coral-400)">${fm(totalInsumos)}</div></div>
       <div class="metric"><div class="mlbl">Total arrecadado</div><div class="mval">${fm(totalVV)}</div></div>
-      <div class="metric"><div class="mlbl">Lucro total</div><div class="mval ${lucroTotal>=0?'pos':'neg'}">${fm(lucroTotal)}</div></div>
+      <div class="metric"><div class="mlbl">Lucro total</div><div class="mval ${lucroTotal>=0?'pos':'neg'}">${fm(lucroTotal)}</div><div class="msub">Já descontando embalagens</div></div>
+      <div class="metric"><div class="mlbl">Custo embalagens</div><div class="mval" style="color:var(--coral-400)">${fm(totalEmb)}</div></div>
       <div class="metric"><div class="mlbl">Margem média</div><div class="mval">${mg.toFixed(1)}%</div></div>
     </div>
     <div class="metric" style="margin-bottom:14px">
@@ -532,11 +560,12 @@ function renderWeekly(lst,inv){
     const wk=monOf(l.dataVenda);
     if(!weeks[wk]) weeks[wk]={vendas:0,investido:0,lucro:0,count:0};
     const vv=parseFloat(l.valorVendido)||0;
+    const emb=parseFloat(l.custoEmbalagem)||0;
     const invItem=inv.find(i=>i.sku===l.sku);
     const pago=invItem?parseFloat(invItem.valorPago)||0:0;
     weeks[wk].vendas+=vv;
     weeks[wk].investido+=pago;
-    weeks[wk].lucro+=vv-pago;
+    weeks[wk].lucro+=vv-pago-emb;
     weeks[wk].count++;
   });
 
@@ -557,11 +586,12 @@ function renderWeekly(lst,inv){
     const mk=l.dataVenda.slice(0,7);
     if(!months[mk]) months[mk]={vendas:0,investido:0,lucro:0,count:0};
     const vv=parseFloat(l.valorVendido)||0;
+    const emb=parseFloat(l.custoEmbalagem)||0;
     const invItem=inv.find(i=>i.sku===l.sku);
     const pago=invItem?parseFloat(invItem.valorPago)||0:0;
     months[mk].vendas+=vv;
     months[mk].investido+=pago;
-    months[mk].lucro+=vv-pago;
+    months[mk].lucro+=vv-pago-emb;
     months[mk].count++;
   });
   const sortedMonths=Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,6);
@@ -653,10 +683,11 @@ function openMonthDetail(monthKey){
     const wk=monOf(l.dataVenda);
     if(!wks[wk]) wks[wk]={vendas:0,investido:0,lucro:0,count:0};
     const vv=parseFloat(l.valorVendido)||0;
+    const emb=parseFloat(l.custoEmbalagem)||0;
     const invItem=S.inventario.find(i=>i.sku===l.sku);
     const pago=invItem?parseFloat(invItem.valorPago)||0:0;
-    wks[wk].vendas+=vv; wks[wk].investido+=pago; wks[wk].lucro+=vv-pago; wks[wk].count++;
-    totVendas+=vv; totInvest+=pago; totLucro+=vv-pago; totCount++;
+    wks[wk].vendas+=vv; wks[wk].investido+=pago; wks[wk].lucro+=vv-pago-emb; wks[wk].count++;
+    totVendas+=vv; totInvest+=pago; totLucro+=vv-pago-emb; totCount++;
   });
   const sortedWks=Object.entries(wks).sort((a,b)=>b[0].localeCompare(a[0]));
 
@@ -722,7 +753,9 @@ function openWeekDetail(weekStart){
     const invItem=S.inventario.find(i=>i.sku===l.sku);
     const pago=invItem?parseFloat(invItem.valorPago)||0:0;
     const vendido=parseFloat(l.valorVendido)||0;
-    const lucro=vendido-pago;
+    const custoEmb=parseFloat(l.custoEmbalagem)||0;
+    const lucro=vendido-pago-custoEmb;
+    const embNome=l.embalagemId?(S.insumos.find(s=>s.id===l.embalagemId)||{}).nome||'':'';
     // Days in stock: from dataCompra to dataVenda
     let dias='—';
     if(invItem&&invItem.dataCompra&&l.dataVenda){
@@ -734,7 +767,7 @@ function openWeekDetail(weekStart){
     return {
       sku:l.sku,
       nome:invItem?invItem.nome:'(item removido)',
-      pago, vendido, lucro,
+      pago, vendido, lucro, custoEmb, embNome,
       dias,
       plataforma:l.plataforma||'—',
       dataVenda:l.dataVenda,
@@ -743,6 +776,7 @@ function openWeekDetail(weekStart){
 
   const totInvestido=items.reduce((s,i)=>s+i.pago,0);
   const totVendas=items.reduce((s,i)=>s+i.vendido,0);
+  const totEmb=items.reduce((s,i)=>s+i.custoEmb,0);
   const totLucro=items.reduce((s,i)=>s+i.lucro,0);
 
   const fmt=dt=>new Date(dt+'T12:00:00').toLocaleDateString('pt-BR',{month:'short',day:'numeric'});
@@ -773,6 +807,7 @@ function openWeekDetail(weekStart){
                 <div>Vendido: <b>${fm(i.vendido)}</b></div>
                 <div>Em estoque: <b>${i.dias}</b></div>
                 <div>Plataforma: <b>${i.plataforma}</b></div>
+                ${i.embNome?`<div style="grid-column:1/-1">Embalagem: <b>${i.embNome}</b> (${fm(i.custoEmb)})</div>`:''}
               </div>
             </div>`).join('')}
         `:`<div class="empty">Nenhuma venda nesta semana</div>`}
@@ -799,7 +834,7 @@ function renderInv(){
   else if(invSort==='za') items=[...items].sort((a,b)=>(b.nome||'').localeCompare(a.nome||''));
   else if(invSort==='maior') items=[...items].sort((a,b)=>(parseFloat(b.valorPago)||0)-(parseFloat(a.valorPago)||0));
   else if(invSort==='menor') items=[...items].sort((a,b)=>(parseFloat(a.valorPago)||0)-(parseFloat(b.valorPago)||0));
-  else if(invSort==='lucro') items=[...items].sort((a,b)=>(getVV(b.sku)-(parseFloat(b.valorPago)||0))-(getVV(a.sku)-(parseFloat(a.valorPago)||0)));
+  else if(invSort==='lucro') items=[...items].sort((a,b)=>(getVV(b.sku)-(parseFloat(b.valorPago)||0)-getEmb(b.sku))-(getVV(a.sku)-(parseFloat(a.valorPago)||0)-getEmb(a.sku)));
   else items=[...items].reverse(); // recente = último inserido primeiro
   return `
     <div class="sbar">
@@ -823,7 +858,9 @@ function renderInv(){
     ${items.length===0?'<div class="empty">Nenhum item encontrado</div>':`
     <div class="card" style="padding:0 14px">
       ${items.map(i=>{
-        const vv=getVV(i.sku),lucro=vv-(parseFloat(i.valorPago)||0);
+        const vv=getVV(i.sku);
+        const emb=getEmb(i.sku);
+        const lucro=vv-(parseFloat(i.valorPago)||0)-emb;
         const mg=(parseFloat(i.valorPago)||0)>0?lucro/parseFloat(i.valorPago)*100:0;
         const sv=getSV(i.sku);
         return `<div class="irow ${sv==='Vendido'?'vendido':''}">
@@ -834,6 +871,7 @@ function renderInv(){
               <div class="isub">
                 <span>Pago: <b>${fm(i.valorPago)}</b></span>
                 ${vv?`<span>Vendido: <b>${fm(vv)}</b></span>`:''}
+                ${emb?`<span>Emb: <b>${fm(emb)}</b></span>`:''}
                 ${vv?`<span class="${lucro>=0?'pos':'neg'}">Lucro: ${fm(lucro)} (${mg.toFixed(0)}%)</span>`:''}
               </div>
             </div>
@@ -904,15 +942,26 @@ function renderLst(){
 
 // ── GASTOS ────────────────────────────────────────────────
 function renderGastos(){
-  const gastos=[...S.gastos].sort((a,b)=>b.data.localeCompare(a.data));
+  return `
+    <div class="frow" style="margin-bottom:14px">
+      <button class="chip ${gastosTab==='fixos'?'active':''}" onclick="gastosTab='fixos';render()">💰 Custos fixos</button>
+      <button class="chip ${gastosTab==='insumos'?'active':''}" onclick="gastosTab='insumos';render()">📦 Insumos</button>
+    </div>
+    ${gastosTab==='fixos'?renderGastosFixos():renderInsumos()}
+  `;
+}
+
+function renderGastosFixos(){
+  // Filtrar apenas categoria 'fixo' (ou sem categoria, considerando legado)
+  const gastos=[...S.gastos].filter(g=>g.categoria==='fixo'||!g.categoria).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
   const total=gastos.reduce((s,g)=>s+(parseFloat(g.valor)||0),0);
   return `
     <div class="metric" style="margin-bottom:14px">
-      <div class="mlbl">Total de gastos</div>
+      <div class="mlbl">Total em custos fixos</div>
       <div class="mval neg">${fm(total)}</div>
-      <div class="msub">${gastos.length} registro${gastos.length!==1?'s':''}</div>
+      <div class="msub">${gastos.length} registro${gastos.length!==1?'s':''} · Itens de compra única (etiquetadora, estantes...)</div>
     </div>
-    ${gastos.length===0?'<div class="empty">Nenhum gasto registrado</div>':`
+    ${gastos.length===0?'<div class="empty">Nenhum custo fixo registrado</div>':`
     <div class="card" style="padding:0 14px">
       ${gastos.map(g=>`
         <div class="irow">
@@ -931,18 +980,200 @@ function renderGastos(){
     </div>`}`;
 }
 
+function renderInsumos(){
+  const insumos=[...S.insumos].sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  const totalInvestido=S.gastos.filter(g=>g.categoria==='insumo').reduce((s,g)=>s+(parseFloat(g.valor)||0),0);
+  const valorEstoque=insumos.reduce((s,i)=>s+((parseFloat(i.qtdEstoque)||0)*(parseFloat(i.valorUnitario)||0)),0);
+  const baixos=insumos.filter(i=>(parseFloat(i.qtdEstoque)||0)<=(parseFloat(i.qtdMinima)||0));
+  return `
+    <div class="mgrid">
+      <div class="metric">
+        <div class="mlbl">Total investido</div>
+        <div class="mval neg">${fm(totalInvestido)}</div>
+        <div class="msub">${insumos.length} tipo${insumos.length!==1?'s':''} cadastrado${insumos.length!==1?'s':''}</div>
+      </div>
+      <div class="metric">
+        <div class="mlbl">Valor em estoque</div>
+        <div class="mval">${fm(valorEstoque)}</div>
+        <div class="msub">${baixos.length} ${baixos.length===1?'item baixo':'itens baixos'}</div>
+      </div>
+    </div>
+    ${baixos.length>0?`
+      <div class="card" style="background:var(--amber-50);border-color:var(--amber-100);margin-bottom:10px">
+        <div style="font-size:12px;color:var(--amber-800);font-weight:500;margin-bottom:4px">⚠️ Estoque baixo</div>
+        <div style="font-size:12px;color:var(--amber-800)">${baixos.map(i=>`<b>${i.nome}</b> (${i.qtdEstoque} restante${i.qtdEstoque==1?'':'s'})`).join(' · ')}</div>
+      </div>
+    `:''}
+    <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="openInsumoModal()">+ Cadastrar novo insumo</button>
+    ${insumos.length===0?'<div class="empty">Nenhum insumo cadastrado. Cadastre embalagens, fitas, etc. para controlar o estoque.</div>':`
+    <div class="card" style="padding:0 14px">
+      ${insumos.map(i=>{
+        const qtd=parseFloat(i.qtdEstoque)||0;
+        const min=parseFloat(i.qtdMinima)||0;
+        const baixo=qtd<=min;
+        return `
+        <div class="irow">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+            <div style="flex:1;min-width:0">
+              <div class="iname">${i.nome} ${baixo?'<span class="badge bg-amber" style="margin-left:4px">baixo</span>':''}</div>
+              <div class="isub" style="margin-top:4px">
+                <span>Estoque: <b style="color:${baixo?'var(--amber-800)':'var(--text)'}">${qtd}</b></span>
+                <span>Mín: <b>${min}</b></span>
+                <span>Unit: <b>${fm(i.valorUnitario)}</b></span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+              <button class="btn btn-sm" onclick='openInsumoModal(${JSON.stringify(i)})' style="padding:4px 8px">✏️</button>
+              <button class="btn btn-sm btn-danger" onclick="delInsumo('${i.id}')" style="padding:4px 8px">🗑</button>
+            </div>
+          </div>
+          <button class="btn btn-sm btn-primary" style="width:100%;padding:6px" onclick='openCompraInsumoModal(${JSON.stringify(i)})'>＋ Comprar mais</button>
+        </div>`;
+      }).join('')}
+    </div>`}`;
+}
+
+function openInsumoModal(item){
+  const e=(item&&typeof item==='object')?item:null;
+  document.getElementById('mc').innerHTML=`
+    <div class="mbg" onclick="if(event.target===this)cm()">
+      <div class="modal">
+        <div class="mhdr"><h2>${e?'Editar insumo':'Novo insumo'}</h2><button class="xbtn" onclick="cm()">×</button></div>
+        <label>Nome do insumo</label>
+        <input id="i_nome" value="${e?e.nome||'':''}" placeholder="Ex: Saquinho transparente, Caixa grande..."/>
+        <div class="form-row">
+          <div><label>Qtd em estoque</label><input type="number" id="i_qtd" value="${e?e.qtdEstoque||'':'0'}" placeholder="0" step="1"/></div>
+          <div><label>Qtd mínima (alerta)</label><input type="number" id="i_min" value="${e?e.qtdMinima||'':'5'}" placeholder="5" step="1"/></div>
+        </div>
+        <label>Valor unitário ($)</label>
+        <input type="number" id="i_valor" value="${e?e.valorUnitario||'':''}" placeholder="0.00" step="0.0001"/>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px;margin-top:-6px">💡 Pra calcular: divida o valor da compra pela quantidade comprada</div>
+        <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="saveInsumo('${e?e.id:''}')">Salvar</button>
+      </div>
+    </div>`;
+}
+
+async function saveInsumo(editId){
+  const nome=document.getElementById('i_nome').value.trim();
+  if(!nome){ toast('Nome é obrigatório','error'); return; }
+  const insumo={
+    id: editId||('I-'+Date.now()),
+    nome,
+    qtdEstoque: parseFloat(document.getElementById('i_qtd').value)||0,
+    qtdMinima: parseFloat(document.getElementById('i_min').value)||0,
+    valorUnitario: parseFloat(document.getElementById('i_valor').value)||0,
+  };
+  if(editId){
+    const idx=S.insumos.findIndex(i=>i.id===editId);
+    if(idx>=0) S.insumos[idx]=insumo; else S.insumos.push(insumo);
+  } else {
+    S.insumos.push(insumo);
+  }
+  saveL(); cm(); render();
+  await pushUpsertInsumo(insumo);
+  toast(editId?`"${nome}" atualizado`:`"${nome}" cadastrado`,'success');
+}
+
+async function delInsumo(id){
+  const nome=(S.insumos.find(i=>i.id===id)||{}).nome||'Insumo';
+  if(!confirm(`Remover "${nome}"?`)) return;
+  S.insumos=S.insumos.filter(i=>i.id!==id);
+  saveL(); render();
+  await pushDeleteInsumo(id);
+  toast(`"${nome}" removido`,'warn');
+}
+
+function openCompraInsumoModal(item){
+  const e=(item&&typeof item==='object')?item:null;
+  if(!e){ return; }
+  document.getElementById('mc').innerHTML=`
+    <div class="mbg" onclick="if(event.target===this)cm()">
+      <div class="modal">
+        <div class="mhdr"><h2>Comprar mais</h2><button class="xbtn" onclick="cm()">×</button></div>
+        <div style="font-size:13px;color:var(--text);margin-bottom:10px">
+          <b>${e.nome}</b>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">
+            Estoque atual: ${e.qtdEstoque} · Valor unit atual: ${fm(e.valorUnitario)}
+          </div>
+        </div>
+        <div class="form-row">
+          <div><label>Qtd comprada</label><input type="number" id="c_qtd" placeholder="0" step="1"/></div>
+          <div><label>Valor total ($)</label><input type="number" id="c_valor" placeholder="0.00" step="0.01"/></div>
+        </div>
+        <label>Data</label>
+        <input type="date" id="c_data" value="${new Date().toISOString().slice(0,10)}"/>
+        <div id="c_preview" style="font-size:12px;color:var(--text2);margin-bottom:12px;padding:8px;background:var(--bg2);border-radius:6px;display:none"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="saveCompraInsumo('${e.id}')">Registrar compra</button>
+      </div>
+    </div>`;
+  // Preview ao vivo da média ponderada
+  const updPreview=()=>{
+    const q=parseFloat(document.getElementById('c_qtd').value)||0;
+    const v=parseFloat(document.getElementById('c_valor').value)||0;
+    const prev=document.getElementById('c_preview');
+    if(q>0&&v>0){
+      const qAtual=parseFloat(e.qtdEstoque)||0;
+      const vAtual=parseFloat(e.valorUnitario)||0;
+      const novoTotal=qAtual+q;
+      const novoUnit=(qAtual*vAtual+v)/novoTotal;
+      const unitCompra=v/q;
+      prev.style.display='block';
+      prev.innerHTML=`
+        <div>Unitário desta compra: <b>${fm(unitCompra)}</b></div>
+        <div style="margin-top:3px">Novo estoque: <b>${novoTotal}</b></div>
+        <div style="margin-top:3px">Novo valor unit. (média ponderada): <b>${fm(novoUnit)}</b></div>
+      `;
+    } else {
+      prev.style.display='none';
+    }
+  };
+  document.getElementById('c_qtd').addEventListener('input',updPreview);
+  document.getElementById('c_valor').addEventListener('input',updPreview);
+}
+
+async function saveCompraInsumo(insumoId){
+  const insumo=S.insumos.find(i=>i.id===insumoId);
+  if(!insumo){ toast('Insumo não encontrado','error'); return; }
+  const qtd=parseFloat(document.getElementById('c_qtd').value)||0;
+  const valor=parseFloat(document.getElementById('c_valor').value)||0;
+  const data=document.getElementById('c_data').value;
+  if(qtd<=0||valor<=0){ toast('Informe quantidade e valor','error'); return; }
+  // Média ponderada
+  const qAtual=parseFloat(insumo.qtdEstoque)||0;
+  const vAtual=parseFloat(insumo.valorUnitario)||0;
+  const novoTotal=qAtual+qtd;
+  insumo.qtdEstoque=novoTotal;
+  insumo.valorUnitario=(qAtual*vAtual+valor)/novoTotal;
+  // Registrar gasto vinculado
+  const gasto={
+    id:'G-'+Date.now(),
+    item:`Compra: ${insumo.nome} (${qtd} un)`,
+    valor: valor,
+    data: data,
+    categoria:'insumo',
+    insumoId: insumo.id,
+    quantidade: qtd,
+  };
+  S.gastos.push(gasto);
+  saveL(); cm(); render();
+  await pushUpsertInsumo(insumo);
+  await pushUpsertGasto(gasto);
+  toast(`Compra registrada: ${qtd} ${insumo.nome}`,'success');
+}
+
 function openGastoModal(item){
   const e=(item&&typeof item==='object')?item:null;
   document.getElementById('mc').innerHTML=`
     <div class="mbg" onclick="if(event.target===this)cm()">
       <div class="modal">
-        <div class="mhdr"><h2>${e?'Editar gasto':'Novo gasto'}</h2><button class="xbtn" onclick="cm()">×</button></div>
+        <div class="mhdr"><h2>${e?'Editar custo fixo':'Novo custo fixo'}</h2><button class="xbtn" onclick="cm()">×</button></div>
         <label>Item / Descrição</label>
-        <input id="g_item" value="${e?e.item||'':''}" placeholder="Ex: Caixas de papelão, gasolina..."/>
+        <input id="g_item" value="${e?e.item||'':''}" placeholder="Ex: Etiquetadora, estante..."/>
         <div class="form-row">
           <div><label>Valor ($)</label><input type="number" id="g_valor" value="${e?e.valor||'':''}" placeholder="0.00" step="0.01"/></div>
           <div><label>Data</label><input type="date" id="g_data" value="${e?e.data||'':''}"/></div>
         </div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">💡 Custos fixos são compras únicas (etiquetadora, estantes, caixas de armazenamento, etc.). Para embalagens e materiais consumíveis, use a aba <b>Insumos</b>.</div>
         <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="saveGasto('${e?e.id:''}')">Salvar</button>
       </div>
     </div>`;
@@ -951,12 +1182,16 @@ function openGastoModal(item){
 async function saveGasto(editId){
   const item=document.getElementById('g_item').value.trim();
   if(!item){ toast('Descrição é obrigatória','error'); return; }
+  // Preservar dados extras se for edição (ex: insumoId)
+  const existing = editId ? S.gastos.find(g=>g.id===editId) : null;
   const gasto={
     id: editId||('G-'+Date.now()),
     item,
     valor: document.getElementById('g_valor').value,
     data:  document.getElementById('g_data').value,
+    categoria: existing && existing.categoria ? existing.categoria : 'fixo',
   };
+  if(existing && existing.insumoId){ gasto.insumoId=existing.insumoId; gasto.quantidade=existing.quantidade; }
   if(editId){
     const idx=S.gastos.findIndex(g=>g.id===editId);
     if(idx>=0) S.gastos[idx]=gasto; else S.gastos.push(gasto);
@@ -965,7 +1200,7 @@ async function saveGasto(editId){
   }
   saveL(); cm(); render();
   await pushUpsertGasto(gasto);
-  toast(editId?`"${item}" atualizado`:`Gasto "${item}" registrado`,'success');
+  toast(editId?`"${item}" atualizado`:`Custo "${item}" registrado`,'success');
 }
 
 async function delGasto(id){
@@ -1126,6 +1361,12 @@ async function saveInv(editSku){
 // ── CRUD LST ──────────────────────────────────────────────
 async function delLst(id){
   if(!confirm('Remover anúncio?')) return;
+  // Se for uma venda com embalagem, devolver 1 unidade ao estoque do insumo
+  const l=S.listagem.find(x=>x.id===id);
+  if(l && l.status==='Vendido' && l.embalagemId){
+    const ins=S.insumos.find(i=>i.id===l.embalagemId);
+    if(ins){ ins.qtdEstoque=(parseFloat(ins.qtdEstoque)||0)+1; await pushUpsertInsumo(ins); }
+  }
   S.listagem=S.listagem.filter(l=>l.id!==id);
   saveL(); render(); await pushDelete('listagem',id);
   toast('Anúncio removido','warn');
@@ -1134,6 +1375,8 @@ function openLstModal(item){
   const e=item||null, c=S.config;
   const editSku=e?e.sku:'';
   const editNome=e?(S.inventario.find(i=>i.sku===e.sku)||{}).nome||'':'';
+  // Filtrar insumos disponíveis (com estoque > 0). Se já tem embalagem selecionada, incluir mesmo se estoque=0
+  const insumosOpt=S.insumos.filter(i=>(parseFloat(i.qtdEstoque)||0)>0 || (e && e.embalagemId===i.id));
   document.getElementById('mc').innerHTML=`
     <div class="mbg" onclick="if(event.target===this)cm()">
       <div class="modal">
@@ -1157,19 +1400,44 @@ function openLstModal(item){
           <div><label>Forma de pgto</label><select id="l_pgto"><option value="">—</option>${c.formasPgto.map(x=>`<option ${e&&e.formaPgto===x?'selected':''}>${x}</option>`).join('')}</select></div>
         </div>
         <label>Status</label>
-        <select id="l_st">${c.statusVenda.map(x=>`<option ${(e?e.status===x:x==='Ativo')?'selected':''}>${x}</option>`).join('')}</select>
+        <select id="l_st" onchange="toggleEmbField()">${c.statusVenda.map(x=>`<option ${(e?e.status===x:x==='Ativo')?'selected':''}>${x}</option>`).join('')}</select>
         <label>Data da venda</label>
         <input type="date" id="l_dvnd" value="${e?e.dataVenda||'':''}"/>
+        <div id="l_emb_wrap" style="display:${e&&e.status==='Vendido'?'block':'none'}">
+          <label>Embalagem usada</label>
+          <select id="l_emb">
+            <option value="">— Nenhuma —</option>
+            ${insumosOpt.map(i=>`<option value="${i.id}" ${e&&e.embalagemId===i.id?'selected':''}>${i.nome} · ${fm(i.valorUnitario)} (${i.qtdEstoque} em estoque)</option>`).join('')}
+          </select>
+          ${insumosOpt.length===0?'<div style="font-size:11px;color:var(--text2);margin-top:-6px;margin-bottom:10px">Nenhum insumo com estoque disponível. Cadastre em Gastos → Insumos.</div>':''}
+        </div>
         <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="saveLst('${e?e.id:''}')">Salvar</button>
       </div>
     </div>`;
   buildAC('l_sku_inp','l_sku_drop','l_sku_val');
+}
+function toggleEmbField(){
+  const st=document.getElementById('l_st').value;
+  document.getElementById('l_emb_wrap').style.display = st==='Vendido' ? 'block' : 'none';
 }
 function openLstModalObj(l){ openLstModal(l); }
 async function saveLst(editId){
   const sku=document.getElementById('l_sku_val').value;
   if(!sku){ toast('Selecione um item','error'); return; }
   const status=document.getElementById('l_st').value;
+  // Pegar registro anterior (se edição) pra saber se embalagem mudou
+  const oldListing = editId ? S.listagem.find(l=>l.id===editId) : null;
+  const oldEmbId = oldListing && oldListing.status==='Vendido' ? (oldListing.embalagemId||'') : '';
+  // Pegar embalagem nova (só se status=Vendido)
+  let newEmbId='', newEmbCusto=0;
+  if(status==='Vendido'){
+    const embEl=document.getElementById('l_emb');
+    newEmbId = embEl ? embEl.value : '';
+    if(newEmbId){
+      const ins=S.insumos.find(i=>i.id===newEmbId);
+      if(ins) newEmbCusto = parseFloat(ins.valorUnitario)||0;
+    }
+  }
   const listing={
     id:editId||('L-'+Date.now()), sku,
     plataforma:document.getElementById('l_plat').value,
@@ -1180,7 +1448,36 @@ async function saveLst(editId){
     dataVenda:document.getElementById('l_dvnd').value,
     formaPgto:document.getElementById('l_pgto').value,
     status,
+    embalagemId: newEmbId || '',
+    custoEmbalagem: newEmbId ? newEmbCusto : 0,
   };
+  // Gerenciar estoque de insumos
+  let toastEstoqueBaixo=null;
+  if(status==='Vendido'){
+    // Caso 1: era vendido com embalagem X, agora vendido com embalagem Y (ou nenhuma) → devolver X, debitar Y
+    // Caso 2: não era vendido, agora é vendido com Y → debitar Y
+    // Caso 3: era vendido com X, agora não é mais vendido → devolver X (tratado no else abaixo)
+    if(oldEmbId && oldEmbId !== newEmbId){
+      const insOld=S.insumos.find(i=>i.id===oldEmbId);
+      if(insOld){ insOld.qtdEstoque=(parseFloat(insOld.qtdEstoque)||0)+1; await pushUpsertInsumo(insOld); }
+    }
+    if(newEmbId && newEmbId !== oldEmbId){
+      const insNew=S.insumos.find(i=>i.id===newEmbId);
+      if(insNew){
+        insNew.qtdEstoque=Math.max(0,(parseFloat(insNew.qtdEstoque)||0)-1);
+        await pushUpsertInsumo(insNew);
+        const qAtual=parseFloat(insNew.qtdEstoque)||0;
+        const min=parseFloat(insNew.qtdMinima)||0;
+        if(qAtual<=min) toastEstoqueBaixo=`⚠️ "${insNew.nome}" abaixo do mínimo (${qAtual} restante${qAtual===1?'':'s'})`;
+      }
+    }
+  } else {
+    // Status não-Vendido: se antes era vendido com embalagem, devolver
+    if(oldEmbId){
+      const insOld=S.insumos.find(i=>i.id===oldEmbId);
+      if(insOld){ insOld.qtdEstoque=(parseFloat(insOld.qtdEstoque)||0)+1; await pushUpsertInsumo(insOld); }
+    }
+  }
   if(editId){ const idx=S.listagem.findIndex(l=>l.id===editId); if(idx>=0) S.listagem[idx]=listing; else S.listagem.push(listing); }
   else S.listagem.push(listing);
   const toDelete=[];
@@ -1201,6 +1498,7 @@ async function saveLst(editId){
   if(status==='Vendido') toast(`"${nomeLst}" marcado como vendido! 🎉`,'success');
   else if(editId) toast(`Anúncio de "${nomeLst}" atualizado`,'success');
   else toast(`"${nomeLst}" adicionado à listagem`,'success');
+  if(toastEstoqueBaixo) setTimeout(()=>toast(toastEstoqueBaixo,'warn',5000),400);
 }
 function dupLst(l){
   // Open listing modal pre-filled with same item but blank id, blank platform, status=Ativo
