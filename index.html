@@ -42,6 +42,21 @@ body{display:flex;justify-content:center;}
 .refresh-btn svg{width:16px;height:16px;}
 .refresh-btn.spinning svg{animation:spin 0.8s linear infinite;}
 @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+
+/* ── Mais drawer ─────────────────────────────── */
+.drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:90;animation:fade-in .18s ease-out;}
+.drawer{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-radius:16px 16px 0 0;padding:16px 16px calc(env(safe-area-inset-bottom,0px) + 28px);z-index:91;animation:slide-up .22s ease-out;max-width:520px;margin:0 auto;box-shadow:0 -8px 24px rgba(0,0,0,.12);}
+.drawer-grip{width:36px;height:4px;background:var(--text2);opacity:.3;border-radius:2px;margin:0 auto 14px;}
+.drawer-title{font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;font-weight:500;margin:0 0 10px 4px;}
+.drawer-item{display:flex;align-items:center;gap:14px;padding:14px 12px;border-radius:10px;cursor:pointer;transition:background .15s;}
+.drawer-item:hover{background:var(--bg2);}
+.drawer-item:active{background:var(--pink-50);}
+.drawer-item svg{width:22px;height:22px;color:var(--pink-600);flex-shrink:0;}
+.drawer-item .di-label{font-size:15px;font-weight:500;color:var(--text);}
+.drawer-item .di-sub{font-size:12px;color:var(--text2);margin-top:1px;}
+.drawer-item .di-chev{margin-left:auto;color:var(--text2);font-size:18px;}
+@keyframes slide-up{from{transform:translateY(100%);}to{transform:translateY(0);}}
+@keyframes fade-in{from{opacity:0;}to{opacity:1;}}
 .content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:16px;padding-bottom:calc(var(--nav-h) + var(--safe-bottom) + 24px);}
 .tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;height:calc(var(--nav-h) + var(--safe-bottom));padding-bottom:var(--safe-bottom);background:var(--bg);border-top:0.5px solid var(--border);box-shadow:0 -4px 20px rgba(0,0,0,0.08);display:flex;z-index:100;align-items:flex-start;}
 .tab{flex:1;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;border:none;background:transparent;color:var(--gray-400);font-size:10px;font-family:inherit;transition:color .15s;min-height:var(--nav-h);}
@@ -186,11 +201,8 @@ label{font-size:12px;color:var(--text2);display:block;margin-bottom:3px;}
     <button class="tab" data-tab="listagem" onclick="go('listagem')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Listagem
     </button>
-    <button class="tab" data-tab="gastos" onclick="go('gastos')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Gastos
-    </button>
-    <button class="tab" data-tab="config" onclick="go('config')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M16.24 7.76a6 6 0 0 1 0 8.49M4.93 4.93a10 10 0 0 0 0 14.14M7.76 7.76a6 6 0 0 0 0 8.49"/></svg>Config
+    <button class="tab" data-tab="mais" onclick="openMaisDrawer()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>Mais
     </button>
   </div>
   <div id="mc"></div>
@@ -213,7 +225,7 @@ let S = {
     statusItem:['Em Estoque','Listado'],
   }
 };
-let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos';
+let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos', invSexo='Todos', gastosFQ='', gastosFSort='recente', relTab='performance';
 try{ const s=localStorage.getItem(LS); if(s) S=JSON.parse(s); }catch(e){}
 function saveL(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
 
@@ -381,12 +393,54 @@ function cleanDate(v){
 }
 function fm(v){ return '$'+(parseFloat(v)||0).toFixed(2); }
 function getVV(sku){ const l=S.listagem.find(l=>l.sku===sku&&l.status==='Vendido'); return l?parseFloat(l.valorVendido)||0:0; }
-function getEmb(sku){ const l=S.listagem.find(l=>l.sku===sku&&l.status==='Vendido'); return l?parseFloat(l.custoEmbalagem)||0:0; }
+// Helpers de embalagem — suportam formato novo (array embalagens) e legado (embalagemId único)
+function lstEmbalagens(l){
+  if(!l) return [];
+  // Formato novo: array de objetos { insumoId, qtd, custoUnit }
+  if(Array.isArray(l.embalagens) && l.embalagens.length){
+    return l.embalagens.map(e=>({
+      insumoId:e.insumoId||e.id||'',
+      qtd:parseFloat(e.qtd)||1,
+      custoUnit:parseFloat(e.custoUnit)||0,
+    }));
+  }
+  // Pode vir como JSON string do Supabase
+  if(typeof l.embalagens==='string' && l.embalagens.trim()){
+    try{
+      const arr=JSON.parse(l.embalagens);
+      if(Array.isArray(arr)&&arr.length){
+        return arr.map(e=>({
+          insumoId:e.insumoId||e.id||'',
+          qtd:parseFloat(e.qtd)||1,
+          custoUnit:parseFloat(e.custoUnit)||0,
+        }));
+      }
+    }catch(_){}
+  }
+  // Formato legado: embalagemId + custoEmbalagem
+  if(l.embalagemId){
+    return [{insumoId:l.embalagemId, qtd:1, custoUnit:parseFloat(l.custoEmbalagem)||0}];
+  }
+  return [];
+}
+function getEmb(sku){
+  const l=S.listagem.find(l=>l.sku===sku&&l.status==='Vendido');
+  if(!l) return 0;
+  // Se já tem custoEmbalagem total salvo, usa direto (snapshot histórico)
+  if(l.custoEmbalagem!==undefined && l.custoEmbalagem!==null && l.custoEmbalagem!=='') return parseFloat(l.custoEmbalagem)||0;
+  // Senão calcula do array
+  return lstEmbalagens(l).reduce((s,e)=>s+e.qtd*e.custoUnit,0);
+}
 function getEmbNome(sku){
   const l=S.listagem.find(l=>l.sku===sku&&l.status==='Vendido');
-  if(!l||!l.embalagemId) return '';
-  const ins=S.insumos.find(i=>i.id===l.embalagemId);
-  return ins?ins.nome:'';
+  if(!l) return '';
+  const arr=lstEmbalagens(l);
+  if(!arr.length) return '';
+  return arr.map(e=>{
+    const ins=S.insumos.find(i=>i.id===e.insumoId);
+    const nome=ins?ins.nome:'?';
+    return e.qtd>1?`${nome} ×${e.qtd}`:nome;
+  }).join(', ');
 }
 function getSV(sku){
   const ls=S.listagem.filter(l=>l.sku===sku);
@@ -399,10 +453,56 @@ function getSV(sku){
 // ── NAV ────────────────────────────────────────────────────
 function go(t){
   tab=t;
-  document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active',el.dataset.tab===t));
+  // "Mais" tab: ativa quando estamos em gastos, relatorios ou config (filhos do drawer)
+  document.querySelectorAll('.tab').forEach(el=>{
+    const inMais=['gastos','relatorios','config'].includes(t);
+    if(el.dataset.tab==='mais') el.classList.toggle('active', inMais);
+    else el.classList.toggle('active', el.dataset.tab===t);
+  });
   const fab=document.getElementById('fab');
   fab.style.display=(t==='inventario'||t==='listagem'||t==='gastos')?'flex':'none';
   render();
+}
+function openMaisDrawer(){
+  const html=`
+    <div class="drawer-bg" onclick="closeMaisDrawer()">
+      <div class="drawer" onclick="event.stopPropagation()">
+        <div class="drawer-grip"></div>
+        <p class="drawer-title">Mais opções</p>
+        <div class="drawer-item" onclick="closeMaisDrawer();go('gastos')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <div style="flex:1;min-width:0">
+            <div class="di-label">Gastos</div>
+            <div class="di-sub">Custos fixos e insumos</div>
+          </div>
+          <span class="di-chev">›</span>
+        </div>
+        <div class="drawer-item" onclick="closeMaisDrawer();go('relatorios')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>
+          <div style="flex:1;min-width:0">
+            <div class="di-label">Relatórios</div>
+            <div class="di-sub">Performance, padrões e tempo</div>
+          </div>
+          <span class="di-chev">›</span>
+        </div>
+        <div class="drawer-item" onclick="closeMaisDrawer();go('config')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M16.24 7.76a6 6 0 0 1 0 8.49M4.93 4.93a10 10 0 0 0 0 14.14M7.76 7.76a6 6 0 0 0 0 8.49"/></svg>
+          <div style="flex:1;min-width:0">
+            <div class="di-label">Configurações</div>
+            <div class="di-sub">Supabase, categorias e listas</div>
+          </div>
+          <span class="di-chev">›</span>
+        </div>
+      </div>
+    </div>`;
+  const el=document.createElement('div');
+  el.id='maisDrawer';
+  el.innerHTML=html;
+  document.body.appendChild(el);
+}
+function closeMaisDrawer(){
+  const el=document.getElementById('maisDrawer');
+  if(el) el.remove();
 }
 function fabAction(){
   if(tab==='inventario') openInvModal();
@@ -421,6 +521,7 @@ function render(){
   else if(tab==='inventario') c.innerHTML=renderInv();
   else if(tab==='listagem') c.innerHTML=renderLst();
   else if(tab==='gastos') c.innerHTML=renderGastos();
+  else if(tab==='relatorios') c.innerHTML=renderRel();
   else c.innerHTML=renderCfg();
 }
 
@@ -493,12 +594,27 @@ function renderDash(){
   const emEst=inv.filter(i=>i.statusItem==='Em Estoque').length;
   const ativos=inv.filter(i=>getSV(i.sku)==='Ativo').length;
   const totV=inv.filter(i=>getSV(i.sku)==='Vendido').length;
+  // Insumos baixos
+  const insumosBaixos=S.insumos.filter(i=>(parseFloat(i.qtdEstoque)||0)<=(parseFloat(i.qtdMinima)||0));
   // Deduplicate vends by SKU (in case of leftover duplicates in state)
   const vendsUniq=Object.values(Object.fromEntries(vends.map(i=>[i.sku,i])));
   const top5=[...vendsUniq].map(i=>({...i,lucro:getVV(i.sku)-(parseFloat(i.valorPago)||0)-getEmb(i.sku)}))
     .sort((a,b)=>b.lucro-a.lucro).slice(0,5);
 
   return `
+    ${insumosBaixos.length>0?`
+      <div class="card" style="background:var(--amber-50);border-color:var(--amber-100);margin-bottom:12px;cursor:pointer" onclick="gastosTab='insumos';go('gastos')">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;color:var(--amber-800);font-weight:600;margin-bottom:4px">⚠️ Estoque de insumos baixo</div>
+            <div style="font-size:12px;color:var(--amber-800);line-height:1.5">
+              ${insumosBaixos.map(i=>`<b>${i.nome}</b> (${i.qtdEstoque}/${i.qtdMinima})`).join(' · ')}
+            </div>
+          </div>
+          <span style="color:var(--amber-800);font-size:18px;flex-shrink:0">›</span>
+        </div>
+      </div>
+    `:''}
     <p class="stitle">Resumo financeiro</p>
     <div class="mgrid">
       <div class="metric"><div class="mlbl">Total investido</div><div class="mval">${fm(totalInvestido)}</div><div class="msub">Mercadoria + fixos + insumos</div></div>
@@ -776,9 +892,9 @@ function openWeekDetail(weekStart){
     const invItem=S.inventario.find(i=>i.sku===l.sku);
     const pago=invItem?parseFloat(invItem.valorPago)||0:0;
     const vendido=parseFloat(l.valorVendido)||0;
-    const custoEmb=parseFloat(l.custoEmbalagem)||0;
+    const custoEmb=getEmb(l.sku);
     const lucro=vendido-pago-custoEmb;
-    const embNome=l.embalagemId?(S.insumos.find(s=>s.id===l.embalagemId)||{}).nome||'':'';
+    const embNome=getEmbNome(l.sku);
     // Days in stock: from dataCompra to dataVenda
     let dias='—';
     if(invItem&&invItem.dataCompra&&l.dataVenda){
@@ -850,6 +966,7 @@ function renderInv(){
       (i.localCompra||'').toLowerCase().includes(q)||(i.categoria||'').toLowerCase().includes(q);
   });
   if(invF!=='Todos') items=items.filter(i=>i.categoria===invF);
+  if(invSexo!=='Todos') items=items.filter(i=>(i.sexo||'')===(invSexo==='—'?'':invSexo));
   if(invStatus==='Vendidos') items=items.filter(i=>getSV(i.sku)==='Vendido');
   else if(invStatus==='Ativos') items=items.filter(i=>getSV(i.sku)!=='Vendido');
   // Sort
@@ -878,6 +995,9 @@ function renderInv(){
       </select>
     </div>
     <div class="frow">${cats.map(c=>`<button class="chip ${invF===c?'active':''}" onclick="invF='${c}';render()">${c}</button>`).join('')}</div>
+    <div class="frow">
+      ${['Todos','F','M','U','—'].map(s=>`<button class="chip ${invSexo===s?'active':''}" onclick="invSexo='${s}';render()">${s==='Todos'?'Todos sexos':s==='—'?'Sem sexo':s}</button>`).join('')}
+    </div>
     ${items.length===0?'<div class="empty">Nenhum item encontrado</div>':`
     <div class="card" style="padding:0 14px">
       ${items.map(i=>{
@@ -889,7 +1009,7 @@ function renderInv(){
         return `<div class="irow ${sv==='Vendido'?'vendido':''}">
           <div style="display:flex;justify-content:space-between;gap:8px">
             <div style="flex:1;min-width:0">
-              <div class="iname">${i.nome}</div>
+              <div class="iname">${i.nome}${i.sexo?` <span class="badge bg-${i.sexo==='F'?'pink':i.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:4px">${i.sexo}</span>`:''}</div>
               <div class="isub" style="margin-bottom:6px"><span class="sku">${i.sku}</span><span>${i.categoria||'—'}</span><span>${i.estadoCompra||'—'}</span></div>
               <div class="isub">
                 <span>Pago: <b>${fm(i.valorPago)}</b></span>
@@ -976,15 +1096,42 @@ function renderGastos(){
 
 function renderGastosFixos(){
   // Filtrar apenas categoria 'fixo' (ou sem categoria, considerando legado)
-  const gastos=[...S.gastos].filter(g=>g.categoria==='fixo'||!g.categoria).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
-  const total=gastos.reduce((s,g)=>s+(parseFloat(g.valor)||0),0);
+  let gastos=S.gastos.filter(g=>g.categoria==='fixo'||!g.categoria);
+  const totalGeral=gastos.reduce((s,g)=>s+(parseFloat(g.valor)||0),0);
+  // Busca
+  if(gastosFQ){
+    const q=gastosFQ.toLowerCase();
+    gastos=gastos.filter(g=>(g.item||'').toLowerCase().includes(q));
+  }
+  // Ordenação
+  if(gastosFSort==='antigo') gastos=[...gastos].sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  else if(gastosFSort==='maior') gastos=[...gastos].sort((a,b)=>(parseFloat(b.valor)||0)-(parseFloat(a.valor)||0));
+  else if(gastosFSort==='menor') gastos=[...gastos].sort((a,b)=>(parseFloat(a.valor)||0)-(parseFloat(b.valor)||0));
+  else if(gastosFSort==='az') gastos=[...gastos].sort((a,b)=>(a.item||'').localeCompare(b.item||''));
+  else gastos=[...gastos].sort((a,b)=>(b.data||'').localeCompare(a.data||'')); // recente
+  const totalFiltrado=gastos.reduce((s,g)=>s+(parseFloat(g.valor)||0),0);
+  const filtrando=!!gastosFQ;
   return `
-    <div class="metric" style="margin-bottom:14px">
-      <div class="mlbl">Total em custos fixos</div>
-      <div class="mval neg">${fm(total)}</div>
-      <div class="msub">${gastos.length} registro${gastos.length!==1?'s':''} · Itens de compra única (etiquetadora, estantes...)</div>
+    <div class="metric" style="margin-bottom:12px">
+      <div class="mlbl">Total em custos fixos${filtrando?' (filtrado)':''}</div>
+      <div class="mval neg">${fm(filtrando?totalFiltrado:totalGeral)}</div>
+      <div class="msub">${gastos.length} registro${gastos.length!==1?'s':''}${filtrando?` de ${S.gastos.filter(g=>g.categoria==='fixo'||!g.categoria).length} total`:' · Compra única (etiquetadora, estantes...)'}</div>
     </div>
-    ${gastos.length===0?'<div class="empty">Nenhum custo fixo registrado</div>':`
+    <div class="sbar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="gastosFSearch" placeholder="Buscar por descrição..." value="${gastosFQ}" oninput="gastosFQ=this.value;render();const el=document.getElementById('gastosFSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+      <select onchange="gastosFSort=this.value;render()" style="width:auto;margin:0;padding:5px 10px;font-size:12px;flex:1">
+        <option value="recente" ${gastosFSort==='recente'?'selected':''}>📅 Mais recente</option>
+        <option value="antigo" ${gastosFSort==='antigo'?'selected':''}>📅 Mais antigo</option>
+        <option value="maior" ${gastosFSort==='maior'?'selected':''}>💰 Maior valor</option>
+        <option value="menor" ${gastosFSort==='menor'?'selected':''}>💰 Menor valor</option>
+        <option value="az" ${gastosFSort==='az'?'selected':''}>🔤 A → Z</option>
+      </select>
+      ${gastosFQ?`<button class="btn btn-sm" onclick="gastosFQ='';render()" style="padding:5px 10px">✕ Limpar</button>`:''}
+    </div>
+    ${gastos.length===0?`<div class="empty">${filtrando?'Nenhum custo encontrado com esse filtro':'Nenhum custo fixo registrado'}</div>`:`
     <div class="card" style="padding:0 14px">
       ${gastos.map(g=>`
         <div class="irow">
@@ -1027,8 +1174,7 @@ function renderInsumos(){
         <div style="font-size:12px;color:var(--amber-800)">${baixos.map(i=>`<b>${i.nome}</b> (${i.qtdEstoque} restante${i.qtdEstoque==1?'':'s'})`).join(' · ')}</div>
       </div>
     `:''}
-    <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="openInsumoModal()">+ Cadastrar novo insumo</button>
-    ${insumos.length===0?'<div class="empty">Nenhum insumo cadastrado. Cadastre embalagens, fitas, etc. para controlar o estoque.</div>':`
+    ${insumos.length===0?'<div class="empty">Nenhum insumo cadastrado. Use o botão ＋ para adicionar embalagens, fitas, etc.</div>':`
     <div class="card" style="padding:0 14px">
       ${insumos.map(i=>{
         const qtd=parseFloat(i.qtdEstoque)||0;
@@ -1235,6 +1381,326 @@ async function delGasto(id){
   toast(`"${nome}" removido`,'warn');
 }
 
+// ── RELATÓRIOS ────────────────────────────────────────────
+function relBuildSold(){
+  // Constrói lista enriquecida de TODAS as vendas com dados úteis
+  const sold=S.listagem.filter(l=>l.status==='Vendido');
+  return sold.map(l=>{
+    const inv=S.inventario.find(i=>i.sku===l.sku);
+    const pago=inv?parseFloat(inv.valorPago)||0:0;
+    const vendido=parseFloat(l.valorVendido)||0;
+    const custoEmb=parseFloat(l.custoEmbalagem)||0;
+    const lucro=vendido-pago-custoEmb;
+    const margem=pago>0?(lucro/pago)*100:0;
+    let dias=null;
+    if(inv&&inv.dataCompra&&l.dataVenda){
+      const dc=new Date(inv.dataCompra+'T12:00:00');
+      const dv=new Date(l.dataVenda+'T12:00:00');
+      const diff=Math.round((dv-dc)/(1000*60*60*24));
+      if(!isNaN(diff)&&diff>=0) dias=diff;
+    }
+    return {
+      sku:l.sku, nome:inv?inv.nome:'(removido)',
+      categoria:inv?inv.categoria:'—',
+      sexo:inv?(inv.sexo||''):'',
+      estado:inv?inv.estadoCompra:'—',
+      local:inv?inv.localCompra:'—',
+      plataforma:l.plataforma||'—',
+      formaPgto:l.formaPgto||'—',
+      pago, vendido, custoEmb, lucro, margem, dias,
+      dataVenda:l.dataVenda||'',
+      dataCompra:inv?inv.dataCompra:'',
+    };
+  });
+}
+
+function renderRel(){
+  const sold=relBuildSold();
+  const tabs=[
+    {id:'performance', label:'📊 Performance'},
+    {id:'padroes',     label:'🎯 Padrões'},
+    {id:'tempo',       label:'📈 Tempo'},
+  ];
+  if(sold.length===0){
+    return `
+      <div class="frow" style="margin-bottom:14px">
+        ${tabs.map(t=>`<button class="chip ${relTab===t.id?'active':''}" onclick="relTab='${t.id}';render()">${t.label}</button>`).join('')}
+      </div>
+      <div class="empty">Sem vendas ainda. Quando você marcar itens como Vendido, os relatórios aparecem aqui.</div>`;
+  }
+  return `
+    <div class="frow" style="margin-bottom:14px">
+      ${tabs.map(t=>`<button class="chip ${relTab===t.id?'active':''}" onclick="relTab='${t.id}';render()">${t.label}</button>`).join('')}
+    </div>
+    ${relTab==='performance'?renderRelPerformance(sold):relTab==='padroes'?renderRelPadroes(sold):renderRelTempo(sold)}
+  `;
+}
+
+// Card-wrapper genérico
+function relCard(title, subtitle, body){
+  return `
+    <div class="card" style="margin-bottom:14px;padding:14px">
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:${subtitle?'2px':'10px'}">${title}</div>
+      ${subtitle?`<div style="font-size:11px;color:var(--text2);margin-bottom:10px">${subtitle}</div>`:''}
+      ${body}
+    </div>`;
+}
+
+function relTopList(items, valFn, valFmt){
+  if(!items.length) return '<div class="empty" style="padding:14px 0">Sem dados</div>';
+  return items.slice(0,10).map((it,idx)=>`
+    <div class="t5row">
+      <div class="t5n">${idx+1}</div>
+      <div style="flex:1;min-width:0">
+        <div class="iname" style="font-size:13px">${it.nome}${it.sexo?` <span class="badge bg-${it.sexo==='F'?'pink':it.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:2px">${it.sexo}</span>`:''}</div>
+        <div class="isub"><span class="sku">${it.sku}</span><span>${it.categoria||'—'}</span></div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:13px;font-weight:600;color:${valFn(it)>=0?'var(--teal-600)':'var(--coral-400)'}">${valFmt(valFn(it))}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Performance ─────────────────────────────────────────
+function renderRelPerformance(sold){
+  // 1. Mais vendidos por categoria (top 10 pelos categorias mais frequentes)
+  // 2. Top 10 lucrativos (já temos no dash, mas com detalhes)
+  // 3. Top 10 melhor margem %
+  // 4. Top 10 que mais demoraram a vender
+  // 5. Top 10 que venderam mais rápido
+
+  // Sort copies
+  const porLucro=[...sold].sort((a,b)=>b.lucro-a.lucro);
+  const porMargem=[...sold].filter(s=>s.pago>0).sort((a,b)=>b.margem-a.margem);
+  const comDias=sold.filter(s=>s.dias!=null);
+  const maisDemorou=[...comDias].sort((a,b)=>b.dias-a.dias);
+  const maisRapido=[...comDias].sort((a,b)=>a.dias-b.dias);
+  // Mais vendidos = item duplicado é raro nesse modelo (cada item é único), então faço por NOME
+  const porNome={};
+  sold.forEach(s=>{
+    if(!porNome[s.nome]) porNome[s.nome]={nome:s.nome, sku:s.sku, categoria:s.categoria, sexo:s.sexo, count:0, lucroTotal:0};
+    porNome[s.nome].count++;
+    porNome[s.nome].lucroTotal+=s.lucro;
+  });
+  const maisVendidos=Object.values(porNome).filter(x=>x.count>1).sort((a,b)=>b.count-a.count);
+  return `
+    ${maisVendidos.length>0?relCard(
+      '🔁 Itens que mais venderam',
+      'Mesmo nome aparecendo em múltiplas vendas',
+      maisVendidos.slice(0,10).map((it,idx)=>`
+        <div class="t5row">
+          <div class="t5n">${idx+1}</div>
+          <div style="flex:1;min-width:0">
+            <div class="iname" style="font-size:13px">${it.nome}${it.sexo?` <span class="badge bg-${it.sexo==='F'?'pink':it.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:2px">${it.sexo}</span>`:''}</div>
+            <div class="isub"><span>${it.categoria||'—'}</span></div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:13px;font-weight:600">${it.count}×</div>
+            <div class="${it.lucroTotal>=0?'pos':'neg'}" style="font-size:11px">${fm(it.lucroTotal)}</div>
+          </div>
+        </div>`).join('')
+    ):''}
+
+    ${relCard('💰 Top 10 mais lucrativos', 'Por valor absoluto de lucro ($)',
+      relTopList(porLucro, x=>x.lucro, fm)
+    )}
+
+    ${relCard('📈 Top 10 melhor margem (%)', 'Lucro relativo ao valor pago',
+      relTopList(porMargem, x=>x.margem, v=>v.toFixed(1)+'%')
+    )}
+
+    ${maisRapido.length>0?relCard('⚡ Venderam mais rápido', 'Menos tempo entre compra e venda',
+      maisRapido.slice(0,10).map((it,idx)=>`
+        <div class="t5row">
+          <div class="t5n">${idx+1}</div>
+          <div style="flex:1;min-width:0">
+            <div class="iname" style="font-size:13px">${it.nome}</div>
+            <div class="isub"><span class="sku">${it.sku}</span><span>${it.categoria||'—'}</span></div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:13px;font-weight:600;color:var(--teal-600)">${it.dias} ${it.dias===1?'dia':'dias'}</div>
+            <div class="${it.lucro>=0?'pos':'neg'}" style="font-size:11px">${fm(it.lucro)}</div>
+          </div>
+        </div>`).join('')
+    ):''}
+
+    ${maisDemorou.length>0?relCard('🐌 Mais tempo parados', 'Tempo entre compra e venda',
+      maisDemorou.slice(0,10).map((it,idx)=>`
+        <div class="t5row">
+          <div class="t5n">${idx+1}</div>
+          <div style="flex:1;min-width:0">
+            <div class="iname" style="font-size:13px">${it.nome}</div>
+            <div class="isub"><span class="sku">${it.sku}</span><span>${it.categoria||'—'}</span></div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:13px;font-weight:600;color:var(--coral-400)">${it.dias} ${it.dias===1?'dia':'dias'}</div>
+            <div class="${it.lucro>=0?'pos':'neg'}" style="font-size:11px">${fm(it.lucro)}</div>
+          </div>
+        </div>`).join('')
+    ):''}
+  `;
+}
+
+// ── Padrões ─────────────────────────────────────────
+function relBarRow(label, valor, maxValor, sublabel, color){
+  const pct = maxValor>0 ? (valor/maxValor)*100 : 0;
+  return `
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+        <div style="font-size:13px;color:var(--text);font-weight:500">${label}</div>
+        <div style="font-size:12px;color:var(--text2)">${sublabel||''}</div>
+      </div>
+      <div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${color||'var(--pink-600)'};border-radius:4px;transition:width .25s"></div>
+      </div>
+    </div>`;
+}
+
+function relGroupBy(arr, keyFn){
+  const out={};
+  arr.forEach(s=>{
+    const k = keyFn(s) || '—';
+    if(!out[k]) out[k]={ key:k, count:0, receita:0, lucro:0, pago:0, margens:[] };
+    out[k].count++;
+    out[k].receita+=s.vendido;
+    out[k].lucro+=s.lucro;
+    out[k].pago+=s.pago;
+    if(s.pago>0) out[k].margens.push(s.margem);
+  });
+  return Object.values(out).map(g=>({
+    ...g,
+    margemMedia: g.margens.length? g.margens.reduce((a,b)=>a+b,0)/g.margens.length : 0,
+  }));
+}
+
+function relRenderGroup(grupos, sortBy='receita', barColor){
+  if(!grupos.length) return '<div class="empty" style="padding:14px 0">Sem dados</div>';
+  const sorted=[...grupos].sort((a,b)=>b[sortBy]-a[sortBy]);
+  const max=Math.max(...sorted.map(g=>g[sortBy]),1);
+  return sorted.map(g=>relBarRow(
+    g.key,
+    g[sortBy],
+    max,
+    `${g.count} venda${g.count!==1?'s':''} · ${fm(g.receita)} · ${g.margemMedia.toFixed(0)}% mg`,
+    barColor
+  )).join('');
+}
+
+function renderRelPadroes(sold){
+  const porCat=relGroupBy(sold, s=>s.categoria);
+  const porSexo=relGroupBy(sold, s=>{
+    const v=s.sexo;
+    if(v==='F') return 'Feminino';
+    if(v==='M') return 'Masculino';
+    if(v==='U') return 'Unissex';
+    return 'Sem sexo';
+  });
+  const porPlat=relGroupBy(sold, s=>s.plataforma);
+  const porLocal=relGroupBy(sold, s=>s.local);
+  const porEstado=relGroupBy(sold, s=>s.estado);
+
+  return `
+    ${relCard('🏷️ Por categoria', 'Ordenado por receita (barra) · venda/total/margem',
+      relRenderGroup(porCat,'receita','var(--pink-600)')
+    )}
+
+    ${relCard('👤 Por sexo da roupa', 'F · M · U · Sem sexo',
+      relRenderGroup(porSexo,'count','var(--teal-600)')
+    )}
+
+    ${relCard('🛒 Por plataforma', 'Qual plataforma vende mais',
+      relRenderGroup(porPlat,'receita','var(--pink-600)')
+    )}
+
+    ${relCard('📍 Por local de compra', 'Onde você compra mais barato e revende melhor',
+      relRenderGroup(porLocal,'lucro','var(--teal-600)')
+    )}
+
+    ${relCard('⭐ Por estado da peça', 'Novo / Usado / Razoável',
+      relRenderGroup(porEstado,'receita','var(--amber-800)')
+    )}
+  `;
+}
+
+// ── Tempo ─────────────────────────────────────────
+function renderRelTempo(sold){
+  // 1. Sazonalidade — soma de vendas por mês (independente do ano)
+  const monthNames=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const porMes=Array(12).fill(null).map((_,i)=>({mes:i, label:monthNames[i], count:0, receita:0, lucro:0}));
+  sold.forEach(s=>{
+    if(!s.dataVenda) return;
+    const m=parseInt(s.dataVenda.slice(5,7))-1;
+    if(m>=0&&m<12){
+      porMes[m].count++;
+      porMes[m].receita+=s.vendido;
+      porMes[m].lucro+=s.lucro;
+    }
+  });
+  const maxRec=Math.max(...porMes.map(m=>m.receita),1);
+
+  // 2. Vendas por mês — últimos 12 meses, com ano
+  const ultimos12={};
+  const hoje=new Date();
+  for(let i=11;i>=0;i--){
+    const d=new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    ultimos12[k]={key:k, label:monthNames[d.getMonth()]+'/'+String(d.getFullYear()).slice(2), count:0, receita:0, lucro:0};
+  }
+  sold.forEach(s=>{
+    if(!s.dataVenda) return;
+    const k=s.dataVenda.slice(0,7);
+    if(ultimos12[k]){
+      ultimos12[k].count++;
+      ultimos12[k].receita+=s.vendido;
+      ultimos12[k].lucro+=s.lucro;
+    }
+  });
+  const u12=Object.values(ultimos12);
+  const maxRec12=Math.max(...u12.map(m=>m.receita),1);
+
+  // 3. Velocidade média de giro
+  const comDias=sold.filter(s=>s.dias!=null);
+  const mediaDias = comDias.length ? (comDias.reduce((s,x)=>s+x.dias,0)/comDias.length) : 0;
+  const minDias = comDias.length ? Math.min(...comDias.map(x=>x.dias)) : 0;
+  const maxDias = comDias.length ? Math.max(...comDias.map(x=>x.dias)) : 0;
+
+  // Identificar mês "champion" (maior receita histórica)
+  const champion=[...porMes].sort((a,b)=>b.receita-a.receita)[0];
+
+  return `
+    ${relCard('🌞 Sazonalidade (todos os anos juntos)',
+      `Mês historicamente mais forte: <b>${champion.count>0?champion.label:'—'}</b> · ${fm(champion.receita)}`,
+      porMes.map(m=>relBarRow(
+        m.label,
+        m.receita,
+        maxRec,
+        m.count>0?`${m.count} venda${m.count!==1?'s':''} · ${fm(m.receita)}`:'sem vendas',
+        m.receita===maxRec&&m.receita>0?'var(--teal-600)':'var(--pink-600)'
+      )).join('')
+    )}
+
+    ${relCard('📅 Últimos 12 meses', 'Receita por mês (mais recente embaixo)',
+      u12.map(m=>relBarRow(
+        m.label,
+        m.receita,
+        maxRec12,
+        m.count>0?`${m.count} venda${m.count!==1?'s':''} · ${fm(m.receita)} · lucro ${fm(m.lucro)}`:'sem vendas',
+        'var(--pink-600)'
+      )).join('')
+    )}
+
+    ${comDias.length>0?relCard('⏱️ Velocidade de giro do estoque',
+      'Tempo entre comprar e vender',
+      `<div class="mgrid">
+        <div class="metric"><div class="mlbl">Média</div><div class="mval">${mediaDias.toFixed(0)} dias</div></div>
+        <div class="metric"><div class="mlbl">Mais rápido</div><div class="mval" style="color:var(--teal-600)">${minDias} ${minDias===1?'dia':'dias'}</div></div>
+        <div class="metric"><div class="mlbl">Mais lento</div><div class="mval" style="color:var(--coral-400)">${maxDias} ${maxDias===1?'dia':'dias'}</div></div>
+        <div class="metric"><div class="mlbl">Amostra</div><div class="mval">${comDias.length} ${comDias.length===1?'venda':'vendas'}</div></div>
+      </div>`
+    ):''}
+  `;
+}
+
 // ── CONFIG ────────────────────────────────────────────────
 function renderCfg(){
   const c=S.config;
@@ -1324,6 +1790,7 @@ async function delInv(sku){
 }
 function openInvModal(item){
   const e=item||null, c=S.config;
+  const sexoOpts=[{v:'',l:'— Não aplicável'},{v:'F',l:'F · Feminino'},{v:'M',l:'M · Masculino'},{v:'U',l:'U · Unissex'}];
   document.getElementById('mc').innerHTML=`
     <div class="mbg" onclick="if(event.target===this)cm()">
       <div class="modal">
@@ -1342,8 +1809,10 @@ function openInvModal(item){
           <div><label>Valor pago ($)</label><input type="number" id="f_pago" value="${e?e.valorPago||'':''}" placeholder="0.00" step="0.01"/></div>
           <div><label>Local de compra</label><select id="f_loc">${c.locaisCompra.map(x=>`<option ${e&&e.localCompra===x?'selected':''}>${x}</option>`).join('')}</select></div>
         </div>
-        <label>Status do item</label>
-        <select id="f_si">${c.statusItem.map(x=>`<option ${e&&e.statusItem===x?'selected':''}>${x}</option>`).join('')}</select>
+        <div class="form-row">
+          <div><label>Sexo (se for roupa)</label><select id="f_sex">${sexoOpts.map(o=>`<option value="${o.v}" ${e&&(e.sexo||'')===o.v?'selected':''}>${o.l}</option>`).join('')}</select></div>
+          <div><label>Status do item</label><select id="f_si">${c.statusItem.map(x=>`<option ${e&&e.statusItem===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        </div>
         <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="saveInv('${e?e.sku:''}')">Salvar</button>
       </div>
     </div>`;
@@ -1360,6 +1829,7 @@ async function saveInv(editSku){
     localCompra:document.getElementById('f_loc').value,
     estadoCompra:document.getElementById('f_est').value,
     statusItem:document.getElementById('f_si').value,
+    sexo:document.getElementById('f_sex').value,
   };
   if(editSku && editSku !== item.sku){
     const updatedListings=[];
@@ -1384,11 +1854,14 @@ async function saveInv(editSku){
 // ── CRUD LST ──────────────────────────────────────────────
 async function delLst(id){
   if(!confirm('Remover anúncio?')) return;
-  // Se for uma venda com embalagem, devolver 1 unidade ao estoque do insumo
+  // Se for uma venda com embalagens, devolver as quantidades ao estoque
   const l=S.listagem.find(x=>x.id===id);
-  if(l && l.status==='Vendido' && l.embalagemId){
-    const ins=S.insumos.find(i=>i.id===l.embalagemId);
-    if(ins){ ins.qtdEstoque=(parseFloat(ins.qtdEstoque)||0)+1; await pushUpsertInsumo(ins); }
+  if(l && l.status==='Vendido'){
+    const embs=lstEmbalagens(l);
+    for(const e of embs){
+      const ins=S.insumos.find(i=>i.id===e.insumoId);
+      if(ins){ ins.qtdEstoque=(parseFloat(ins.qtdEstoque)||0)+(parseFloat(e.qtd)||0); await pushUpsertInsumo(ins); }
+    }
   }
   S.listagem=S.listagem.filter(l=>l.id!==id);
   saveL(); render(); await pushDelete('listagem',id);
@@ -1398,8 +1871,10 @@ function openLstModal(item){
   const e=item||null, c=S.config;
   const editSku=e?e.sku:'';
   const editNome=e?(S.inventario.find(i=>i.sku===e.sku)||{}).nome||'':'';
-  // Filtrar insumos disponíveis (com estoque > 0). Se já tem embalagem selecionada, incluir mesmo se estoque=0
-  const insumosOpt=S.insumos.filter(i=>(parseFloat(i.qtdEstoque)||0)>0 || (e && e.embalagemId===i.id));
+  // Embalagens iniciais (em edição)
+  const embIniciais=e?lstEmbalagens(e):[];
+  // Guardar em variável global temporária do modal pra ser manipulada dinamicamente
+  window.__lstEmbs = embIniciais.map(x=>({...x}));
   document.getElementById('mc').innerHTML=`
     <div class="mbg" onclick="if(event.target===this)cm()">
       <div class="modal">
@@ -1427,17 +1902,76 @@ function openLstModal(item){
         <label>Data da venda</label>
         <input type="date" id="l_dvnd" value="${e?e.dataVenda||'':''}"/>
         <div id="l_emb_wrap" style="display:${e&&e.status==='Vendido'?'block':'none'}">
-          <label>Embalagem usada</label>
-          <select id="l_emb">
-            <option value="">— Nenhuma —</option>
-            ${insumosOpt.map(i=>`<option value="${i.id}" ${e&&e.embalagemId===i.id?'selected':''}>${i.nome} · ${fm(i.valorUnitario)} (${i.qtdEstoque} em estoque)</option>`).join('')}
-          </select>
-          ${insumosOpt.length===0?'<div style="font-size:11px;color:var(--text2);margin-top:-6px;margin-bottom:10px">Nenhum insumo com estoque disponível. Cadastre em Gastos → Insumos.</div>':''}
+          <label>Embalagens usadas</label>
+          <div id="l_embs_list"></div>
+          <button type="button" class="btn btn-sm" style="width:100%;margin-bottom:10px" onclick="addEmbRow()">+ Adicionar embalagem</button>
+          <div id="l_emb_total" style="font-size:12px;color:var(--text2);margin-top:-4px;margin-bottom:10px"></div>
         </div>
         <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="saveLst('${e?e.id:''}')">Salvar</button>
       </div>
     </div>`;
   buildAC('l_sku_inp','l_sku_drop','l_sku_val');
+  renderEmbRows();
+}
+function renderEmbRows(){
+  const wrap=document.getElementById('l_embs_list');
+  if(!wrap) return;
+  const embs=window.__lstEmbs||[];
+  if(embs.length===0){
+    wrap.innerHTML='<div style="font-size:12px;color:var(--text2);padding:6px 2px 10px">Nenhuma embalagem. Clique abaixo pra adicionar.</div>';
+    document.getElementById('l_emb_total').innerHTML='';
+    return;
+  }
+  // Insumos disponíveis
+  const insumos=S.insumos;
+  wrap.innerHTML=embs.map((emb,idx)=>{
+    const insOptsHtml=insumos.map(i=>{
+      const sel=i.id===emb.insumoId?'selected':'';
+      const dispEstoque=parseFloat(i.qtdEstoque)||0;
+      return `<option value="${i.id}" ${sel}>${i.nome} · ${fm(i.valorUnitario)} (${dispEstoque} disp)</option>`;
+    }).join('');
+    return `
+    <div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:8px">
+      <div style="flex:1;min-width:0">
+        <select onchange="updateEmbRow(${idx},'insumoId',this.value)">
+          <option value="">— Selecione —</option>
+          ${insOptsHtml}
+        </select>
+      </div>
+      <div style="width:64px;flex-shrink:0">
+        <input type="number" min="1" step="1" value="${emb.qtd||1}" placeholder="qtd" onchange="updateEmbRow(${idx},'qtd',this.value)" style="text-align:center"/>
+      </div>
+      <button type="button" class="btn btn-sm btn-danger" onclick="removeEmbRow(${idx})" style="padding:7px 10px;flex-shrink:0">✕</button>
+    </div>`;
+  }).join('');
+  // Total
+  let total=0;
+  embs.forEach(emb=>{
+    const ins=insumos.find(i=>i.id===emb.insumoId);
+    if(ins){ total += (parseFloat(ins.valorUnitario)||0) * (parseFloat(emb.qtd)||0); }
+  });
+  document.getElementById('l_emb_total').innerHTML=`Total das embalagens: <b>${fm(total)}</b>`;
+}
+function addEmbRow(){
+  if(!window.__lstEmbs) window.__lstEmbs=[];
+  window.__lstEmbs.push({insumoId:'',qtd:1,custoUnit:0});
+  renderEmbRows();
+}
+function removeEmbRow(idx){
+  if(!window.__lstEmbs) return;
+  window.__lstEmbs.splice(idx,1);
+  renderEmbRows();
+}
+function updateEmbRow(idx,field,value){
+  if(!window.__lstEmbs||!window.__lstEmbs[idx]) return;
+  if(field==='qtd'){ window.__lstEmbs[idx].qtd = Math.max(1, parseInt(value)||1); }
+  else { window.__lstEmbs[idx][field] = value; }
+  // Atualizar custoUnit baseado no insumo
+  if(field==='insumoId'){
+    const ins=S.insumos.find(i=>i.id===value);
+    window.__lstEmbs[idx].custoUnit = ins ? (parseFloat(ins.valorUnitario)||0) : 0;
+  }
+  renderEmbRows();
 }
 function toggleEmbField(){
   const st=document.getElementById('l_st').value;
@@ -1448,19 +1982,47 @@ async function saveLst(editId){
   const sku=document.getElementById('l_sku_val').value;
   if(!sku){ toast('Selecione um item','error'); return; }
   const status=document.getElementById('l_st').value;
-  // Pegar registro anterior (se edição) pra saber se embalagem mudou
+  // Pegar registro anterior pra reverter estoque
   const oldListing = editId ? S.listagem.find(l=>l.id===editId) : null;
-  const oldEmbId = oldListing && oldListing.status==='Vendido' ? (oldListing.embalagemId||'') : '';
-  // Pegar embalagem nova (só se status=Vendido)
-  let newEmbId='', newEmbCusto=0;
+  const oldEmbs = (oldListing && oldListing.status==='Vendido') ? lstEmbalagens(oldListing) : [];
+  // Pegar embalagens novas (só se Vendido)
+  let newEmbs = [];
   if(status==='Vendido'){
-    const embEl=document.getElementById('l_emb');
-    newEmbId = embEl ? embEl.value : '';
-    if(newEmbId){
-      const ins=S.insumos.find(i=>i.id===newEmbId);
-      if(ins) newEmbCusto = parseFloat(ins.valorUnitario)||0;
+    const raw = window.__lstEmbs || [];
+    // Filtrar entradas válidas (com insumoId e qtd > 0)
+    newEmbs = raw.filter(e=>e.insumoId && (parseFloat(e.qtd)||0)>0).map(e=>{
+      const ins=S.insumos.find(i=>i.id===e.insumoId);
+      return {
+        insumoId: e.insumoId,
+        qtd: parseInt(e.qtd)||1,
+        custoUnit: ins ? (parseFloat(ins.valorUnitario)||0) : (parseFloat(e.custoUnit)||0),
+      };
+    });
+  }
+  // Reverter estoque dos antigos (devolve qtd ao insumo)
+  for(const oe of oldEmbs){
+    const ins=S.insumos.find(i=>i.id===oe.insumoId);
+    if(ins){ ins.qtdEstoque=(parseFloat(ins.qtdEstoque)||0) + (parseFloat(oe.qtd)||0); }
+  }
+  // Debitar estoque dos novos
+  const baixos=[];
+  for(const ne of newEmbs){
+    const ins=S.insumos.find(i=>i.id===ne.insumoId);
+    if(ins){
+      ins.qtdEstoque=Math.max(0,(parseFloat(ins.qtdEstoque)||0) - (parseFloat(ne.qtd)||0));
+      const qAtual=parseFloat(ins.qtdEstoque)||0;
+      const min=parseFloat(ins.qtdMinima)||0;
+      if(qAtual<=min) baixos.push(`${ins.nome} (${qAtual})`);
     }
   }
+  // Persistir todos os insumos afetados
+  const afetados=new Set([...oldEmbs.map(e=>e.insumoId), ...newEmbs.map(e=>e.insumoId)]);
+  for(const insId of afetados){
+    const ins=S.insumos.find(i=>i.id===insId);
+    if(ins) await pushUpsertInsumo(ins);
+  }
+  // Calcular custo total
+  const custoTotalEmb = newEmbs.reduce((s,e)=>s + (e.qtd*e.custoUnit), 0);
   const listing={
     id:editId||('L-'+Date.now()), sku,
     plataforma:document.getElementById('l_plat').value,
@@ -1471,36 +2033,11 @@ async function saveLst(editId){
     dataVenda:document.getElementById('l_dvnd').value,
     formaPgto:document.getElementById('l_pgto').value,
     status,
-    embalagemId: newEmbId || '',
-    custoEmbalagem: newEmbId ? newEmbCusto : 0,
+    embalagens: status==='Vendido' ? newEmbs : [],
+    custoEmbalagem: status==='Vendido' ? custoTotalEmb : 0,
+    // limpar campos legados
+    embalagemId: '',
   };
-  // Gerenciar estoque de insumos
-  let toastEstoqueBaixo=null;
-  if(status==='Vendido'){
-    // Caso 1: era vendido com embalagem X, agora vendido com embalagem Y (ou nenhuma) → devolver X, debitar Y
-    // Caso 2: não era vendido, agora é vendido com Y → debitar Y
-    // Caso 3: era vendido com X, agora não é mais vendido → devolver X (tratado no else abaixo)
-    if(oldEmbId && oldEmbId !== newEmbId){
-      const insOld=S.insumos.find(i=>i.id===oldEmbId);
-      if(insOld){ insOld.qtdEstoque=(parseFloat(insOld.qtdEstoque)||0)+1; await pushUpsertInsumo(insOld); }
-    }
-    if(newEmbId && newEmbId !== oldEmbId){
-      const insNew=S.insumos.find(i=>i.id===newEmbId);
-      if(insNew){
-        insNew.qtdEstoque=Math.max(0,(parseFloat(insNew.qtdEstoque)||0)-1);
-        await pushUpsertInsumo(insNew);
-        const qAtual=parseFloat(insNew.qtdEstoque)||0;
-        const min=parseFloat(insNew.qtdMinima)||0;
-        if(qAtual<=min) toastEstoqueBaixo=`⚠️ "${insNew.nome}" abaixo do mínimo (${qAtual} restante${qAtual===1?'':'s'})`;
-      }
-    }
-  } else {
-    // Status não-Vendido: se antes era vendido com embalagem, devolver
-    if(oldEmbId){
-      const insOld=S.insumos.find(i=>i.id===oldEmbId);
-      if(insOld){ insOld.qtdEstoque=(parseFloat(insOld.qtdEstoque)||0)+1; await pushUpsertInsumo(insOld); }
-    }
-  }
   if(editId){ const idx=S.listagem.findIndex(l=>l.id===editId); if(idx>=0) S.listagem[idx]=listing; else S.listagem.push(listing); }
   else S.listagem.push(listing);
   const toDelete=[];
@@ -1521,7 +2058,9 @@ async function saveLst(editId){
   if(status==='Vendido') toast(`"${nomeLst}" marcado como vendido! 🎉`,'success');
   else if(editId) toast(`Anúncio de "${nomeLst}" atualizado`,'success');
   else toast(`"${nomeLst}" adicionado à listagem`,'success');
-  if(toastEstoqueBaixo) setTimeout(()=>toast(toastEstoqueBaixo,'warn',5000),400);
+  if(baixos.length) setTimeout(()=>toast(`⚠️ Estoque baixo: ${baixos.join(' · ')}`,'warn',5000),400);
+  // Limpar variável temporária
+  window.__lstEmbs=[];
 }
 function dupLst(l){
   // Open listing modal pre-filled with same item but blank id, blank platform, status=Ativo
