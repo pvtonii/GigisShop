@@ -236,7 +236,7 @@ let S = {
     statusItem:['Em Estoque','Listado'],
   }
 };
-let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos', invSexo='Todos', gastosFQ='', gastosFSort='recente', relTab='performance';
+let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos', invSexo='Todos', gastosFQ='', gastosFSort='recente', relTab='performance', estoqueQ='';
 try{ const s=localStorage.getItem(LS); if(s) S=JSON.parse(s); }catch(e){}
 function saveL(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
 
@@ -409,6 +409,18 @@ function genSKU(){
   });
   const next=(nums.length?Math.max(...nums):0)+1;
   return 'GP-'+String(next).padStart(4,'0');
+}
+// Helper: retorna a localização física de um item pelo SKU (ou null se vazia)
+function getLoc(sku){
+  const inv=S.inventario.find(i=>i.sku===sku);
+  return inv && inv.localizacao ? String(inv.localizacao).trim() : '';
+}
+// Renderiza badge de localização (ou "sem local" discreto se vazio)
+function locBadge(sku){
+  const l=getLoc(sku);
+  return l
+    ? `<span class="sku" title="Localização">📍 ${l}</span>`
+    : `<span class="sku" style="opacity:.55" title="Sem localização definida">📍 —</span>`;
 }
 function cleanDate(v){
   if(!v) return '';
@@ -700,7 +712,7 @@ function renderDash(){
           <div class="t5n">${idx+1}</div>
           <div style="flex:1;min-width:0">
             <div class="iname" style="font-size:13px">${i.nome}</div>
-            <div class="isub"><span class="sku">${i.sku}</span><span>${i.localCompra||'—'}</span></div>
+            <div class="isub">${locBadge(i.sku)}<span>${i.localCompra||'—'}</span></div>
           </div>
           <div style="text-align:right">
             <div style="font-size:13px;font-weight:500">${fm(getVV(i.sku))}</div>
@@ -932,6 +944,7 @@ function openWeekDetail(weekStart){
     return {
       sku:l.sku,
       nome:invItem?invItem.nome:'(item removido)',
+      localizacao:invItem?invItem.localizacao||'':'',
       pago, vendido, lucro, custoEmb, embNome,
       dias,
       plataforma:l.plataforma||'—',
@@ -964,7 +977,7 @@ function openWeekDetail(weekStart){
           ${items.map(i=>`
             <div class="wd-item" style="cursor:pointer" onclick="cm();openItemDetail('${i.sku}')">
               <div class="wd-head">
-                <div class="wd-name">${i.nome}<div style="margin-top:3px"><span class="sku">${i.sku}</span></div></div>
+                <div class="wd-name">${i.nome}<div style="margin-top:3px">${locBadge(i.sku)}</div></div>
                 <div class="wd-lucro ${i.lucro>=0?'pos':'neg'}">${i.lucro>=0?'+':''}${fm(i.lucro)}</div>
               </div>
               <div class="wd-meta">
@@ -988,7 +1001,7 @@ function renderInv(){
   const cats=['Todos',...S.config.categorias];
   let items=S.inventario.filter(i=>{
     const q=invQ.toLowerCase();
-    return !q||(i.nome||'').toLowerCase().includes(q)||(i.sku||'').toLowerCase().includes(q)||
+    return !q||(i.nome||'').toLowerCase().includes(q)||(i.localizacao||'').toLowerCase().includes(q)||
       (i.localCompra||'').toLowerCase().includes(q)||(i.categoria||'').toLowerCase().includes(q);
   });
   if(invF!=='Todos') items=items.filter(i=>i.categoria===invF);
@@ -1005,7 +1018,7 @@ function renderInv(){
   return `
     <div class="sbar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="invSearch" placeholder="Buscar por nome, SKU, local..." value="${invQ}" oninput="invQ=this.value;render();const el=document.getElementById('invSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>
+      <input id="invSearch" placeholder="Buscar por nome, localização, local..." value="${invQ}" oninput="invQ=this.value;render();const el=document.getElementById('invSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
       <div class="frow" style="margin:0;flex:1;min-width:0">
@@ -1036,7 +1049,7 @@ function renderInv(){
           <div style="display:flex;justify-content:space-between;gap:8px">
             <div style="flex:1;min-width:0">
               <div class="iname">${i.nome}${i.sexo?` <span class="badge bg-${i.sexo==='F'?'pink':i.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:4px">${i.sexo}</span>`:''}</div>
-              <div class="isub" style="margin-bottom:6px"><span class="sku">${i.sku}</span><span>${i.categoria||'—'}</span><span>${i.estadoCompra||'—'}</span></div>
+              <div class="isub" style="margin-bottom:6px">${locBadge(i.sku)}<span>${i.categoria||'—'}</span><span>${i.estadoCompra||'—'}</span></div>
               <div class="isub">
                 <span>Pago: <b>${fm(i.valorPago)}</b></span>
                 ${vv?`<span>Vendido: <b>${fm(vv)}</b></span>`:''}
@@ -1066,14 +1079,14 @@ function renderLst(){
   const plats=['Todos',...S.config.plataformas];
   let items=S.listagem.filter(l=>{
     const q=lstQ.toLowerCase(), inv=S.inventario.find(i=>i.sku===l.sku);
-    return !q||(l.sku||'').toLowerCase().includes(q)||(l.plataforma||'').toLowerCase().includes(q)||
+    return !q||((inv&&inv.localizacao)||'').toLowerCase().includes(q)||(l.plataforma||'').toLowerCase().includes(q)||
       ((inv&&inv.nome)||'').toLowerCase().includes(q);
   });
   if(lstF!=='Todos') items=items.filter(l=>l.plataforma===lstF);
   return `
     <div class="sbar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="lstSearch" placeholder="Buscar por SKU, plataforma, item..." value="${lstQ}" oninput="lstQ=this.value;render();const el=document.getElementById('lstSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>
+      <input id="lstSearch" placeholder="Buscar por localização, plataforma, item..." value="${lstQ}" oninput="lstQ=this.value;render();const el=document.getElementById('lstSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>
     </div>
     <div class="frow">${plats.map(p=>`<button class="chip ${lstF===p?'active':''}" onclick="lstF='${p}';render()">${p}</button>`).join('')}</div>
     ${items.length===0?'<div class="empty">Nenhum anúncio cadastrado</div>':`
@@ -1085,7 +1098,7 @@ function renderLst(){
             <div style="flex:1;min-width:0">
               <div class="iname">${nome}</div>
               <div class="isub" style="margin-bottom:6px">
-                <span class="sku">${l.sku}</span>
+                ${locBadge(l.sku)}
                 <span style="background:var(--purple-50);color:var(--purple-800);padding:2px 7px;border-radius:20px;font-size:11px">${l.plataforma||'—'}</span>
               </div>
               <div class="isub">
@@ -1479,7 +1492,7 @@ function relTopList(items, valFn, valFmt){
       <div class="t5n">${idx+1}</div>
       <div style="flex:1;min-width:0">
         <div class="iname" style="font-size:13px">${it.nome}${it.sexo?` <span class="badge bg-${it.sexo==='F'?'pink':it.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:2px">${it.sexo}</span>`:''}</div>
-        <div class="isub"><span class="sku">${it.sku}</span><span>${it.categoria||'—'}</span></div>
+        <div class="isub">${locBadge(it.sku)}<span>${it.categoria||'—'}</span></div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:13px;font-weight:600;color:${valFn(it)>=0?'var(--teal-600)':'var(--coral-400)'}">${valFmt(valFn(it))}</div>
@@ -1540,7 +1553,7 @@ function relRowItem(it, idx){
       <div class="t5n">${idx+1}</div>
       <div style="flex:1;min-width:0">
         <div class="iname" style="font-size:13px">${it.nome}${it.sexo?` <span class="badge bg-${it.sexo==='F'?'pink':it.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:2px">${it.sexo}</span>`:''}</div>
-        <div class="isub"><span class="sku">${it.sku}</span><span>${it.categoria||'—'}</span></div>
+        <div class="isub">${locBadge(it.sku)}<span>${it.categoria||'—'}</span></div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:13px;font-weight:600;color:${it.lucro>=0?'var(--teal-600)':'var(--coral-400)'}">${fm(it.lucro)}</div>
@@ -1554,7 +1567,7 @@ function relRowMargem(it, idx){
       <div class="t5n">${idx+1}</div>
       <div style="flex:1;min-width:0">
         <div class="iname" style="font-size:13px">${it.nome}${it.sexo?` <span class="badge bg-${it.sexo==='F'?'pink':it.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:2px">${it.sexo}</span>`:''}</div>
-        <div class="isub"><span class="sku">${it.sku}</span><span>${it.categoria||'—'}</span></div>
+        <div class="isub">${locBadge(it.sku)}<span>${it.categoria||'—'}</span></div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:13px;font-weight:600;color:var(--teal-600)">${it.margem.toFixed(1)}%</div>
@@ -1568,7 +1581,7 @@ function relRowDias(it, idx, isRapido){
       <div class="t5n">${idx+1}</div>
       <div style="flex:1;min-width:0">
         <div class="iname" style="font-size:13px">${it.nome}${it.sexo?` <span class="badge bg-${it.sexo==='F'?'pink':it.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:2px">${it.sexo}</span>`:''}</div>
-        <div class="isub"><span class="sku">${it.sku}</span><span>${it.categoria||'—'}</span></div>
+        <div class="isub">${locBadge(it.sku)}<span>${it.categoria||'—'}</span></div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:13px;font-weight:600;color:${isRapido?'var(--teal-600)':'var(--coral-400)'}">${it.dias} ${it.dias===1?'dia':'dias'}</div>
@@ -1777,6 +1790,54 @@ function renderRelTempo(sold){
   // Identificar mês "champion" (maior receita histórica)
   const champion=[...porMes].sort((a,b)=>b.receita-a.receita)[0];
 
+  // 4. Itens em estoque (não vendidos) com dias parados
+  const hoje0=new Date(); hoje0.setHours(12,0,0,0);
+  const emEstoque=S.inventario
+    .filter(i=>getSV(i.sku)!=='Vendido' && i.dataCompra)
+    .map(i=>{
+      const dc=new Date(i.dataCompra+'T12:00:00');
+      const diff=Math.round((hoje0-dc)/(1000*60*60*24));
+      return {...i, diasEstoque:isNaN(diff)||diff<0?0:diff, sv:getSV(i.sku)};
+    })
+    .sort((a,b)=>b.diasEstoque-a.diasEstoque);
+
+  const top5Encalhados=emEstoque.slice(0,5);
+  const qBusca=(estoqueQ||'').toLowerCase().trim();
+  const buscaResultados=qBusca
+    ? emEstoque.filter(i=>
+        (i.nome||'').toLowerCase().includes(qBusca) ||
+        (i.localizacao||'').toLowerCase().includes(qBusca) ||
+        (i.categoria||'').toLowerCase().includes(qBusca) ||
+        (i.localCompra||'').toLowerCase().includes(qBusca)
+      ).slice(0,20)
+    : [];
+
+  // Cor do "tempo encalhado" baseada em dias
+  function corDias(d){
+    if(d>=180) return 'var(--coral-400)';
+    if(d>=90)  return 'var(--amber-800)';
+    return 'var(--text2)';
+  }
+  // Renderiza uma linha de item em estoque
+  function rowEstoque(i, idx){
+    const c=corDias(i.diasEstoque);
+    const statusBadge = i.sv==='Ativo'
+      ? `<span class="badge bg-amber" style="font-size:10px">Listado</span>`
+      : `<span class="badge bg-teal" style="font-size:10px">Em Estoque</span>`;
+    return `
+      <div class="t5row rel-row" onclick="cm();openItemDetail('${i.sku}')" style="cursor:pointer">
+        ${idx!=null?`<div class="t5n">${idx+1}</div>`:''}
+        <div style="flex:1;min-width:0">
+          <div class="iname" style="font-size:13px">${i.nome}${i.sexo?` <span class="badge bg-${i.sexo==='F'?'pink':i.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:2px">${i.sexo}</span>`:''}</div>
+          <div class="isub">${locBadge(i.sku)}<span>${i.categoria||'—'}</span>${statusBadge}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:13px;font-weight:600;color:${c}">${i.diasEstoque} ${i.diasEstoque===1?'dia':'dias'}</div>
+          <div style="font-size:11px;color:var(--text2)">Pago ${fm(i.valorPago)}</div>
+        </div>
+      </div>`;
+  }
+
   // Renderiza uma barra clicável de tempo
   function tempoBarra(m, max, cacheKey, fullLabel, color){
     if(m.items.length>0){
@@ -1802,6 +1863,28 @@ function renderRelTempo(sold){
   }
 
   return `
+    ${relCard('📦 Top 5 mais tempo em estoque',
+      emEstoque.length>0?`Itens não vendidos parados há mais tempo · candidatos a promoção`:'',
+      top5Encalhados.length>0
+        ? top5Encalhados.map((i,idx)=>rowEstoque(i,idx)).join('')
+        : '<div class="empty" style="padding:8px 0">Nenhum item em estoque</div>'
+    )}
+
+    ${relCard('🔍 Buscar item no estoque',
+      'Pesquise por nome, localização, categoria ou local pra ver há quanto tempo está parado',
+      `<div class="sbar" style="margin-bottom:${buscaResultados.length>0||qBusca?'10px':'0'}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input id="estoqueSearch" placeholder="Buscar por nome, localização..." value="${estoqueQ}" oninput="estoqueQ=this.value;render();const el=document.getElementById('estoqueSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>
+      </div>
+      ${qBusca
+        ? (buscaResultados.length>0
+            ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px">${buscaResultados.length} resultado${buscaResultados.length!==1?'s':''}</div>` + buscaResultados.map(i=>rowEstoque(i,null)).join('')
+            : '<div class="empty" style="padding:8px 0">Nenhum item em estoque encontrado</div>'
+          )
+        : ''
+      }`
+    )}
+
     ${relCard('🌞 Sazonalidade (todos os anos juntos)',
       `Mês historicamente mais forte: <b>${champion.count>0?champion.labelFull:'—'}</b> · ${fm(champion.receita)}`,
       porMes.map((m,i)=>tempoBarra(
@@ -1941,6 +2024,8 @@ function openInvModal(item){
           <div><label>Sexo (se for roupa)</label><select id="f_sex">${sexoOpts.map(o=>`<option value="${o.v}" ${e&&(e.sexo||'')===o.v?'selected':''}>${o.l}</option>`).join('')}</select></div>
           <div><label>Status do item</label><select id="f_si">${c.statusItem.map(x=>`<option ${e&&e.statusItem===x?'selected':''}>${x}</option>`).join('')}</select></div>
         </div>
+        <label>Localização <span style="color:var(--text2);font-weight:400">(onde está guardado fisicamente)</span></label>
+        <input id="f_localizacao" value="${e?e.localizacao||'':''}" placeholder="Ex: Caixa 1, Prateleira A, Sacola azul..."/>
         <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="saveInv('${e?e.sku:''}')">Salvar</button>
       </div>
     </div>`;
@@ -1958,6 +2043,7 @@ async function saveInv(editSku){
     estadoCompra:document.getElementById('f_est').value,
     statusItem:document.getElementById('f_si').value,
     sexo:document.getElementById('f_sex').value,
+    localizacao:document.getElementById('f_localizacao').value.trim(),
   };
   if(editSku && editSku !== item.sku){
     const updatedListings=[];
@@ -2233,7 +2319,7 @@ function openItemDetail(sku){
           <button class="xbtn" onclick="cm()">×</button>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-          <span class="sku">${inv.sku}</span>
+          ${locBadge(inv.sku)}
           ${bStatus(inv.statusItem)}
           ${lst?bVenda('Vendido'):(ativos.length?bVenda('Ativo'):'')}
         </div>
@@ -2252,6 +2338,7 @@ function openItemDetail(sku){
           ${row('Sexo', sexoLabel)}
           ${row('Estado', inv.estadoCompra||'—')}
           ${row('Local', inv.localCompra||'—')}
+          ${row('Localização', inv.localizacao||'—')}
           ${row('Data da compra', inv.dataCompra||'—')}
           ${row('Valor pago', fm(pago), 'var(--coral-400)')}
         </div>
