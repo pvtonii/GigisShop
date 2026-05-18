@@ -236,7 +236,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '01';
+const APP_VERSION = '02';
 const APP_VERSION_DATE = 'May 17, 2026';
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
@@ -1328,33 +1328,45 @@ function openInsumoModal(item){
   const valorPagoInicial = valorPagoSalvo!=null ? valorPagoSalvo.toFixed(2) : '';
   const hoje=new Date().toISOString().slice(0,10);
   const dataInicial = e && e.dataCompra ? e.dataCompra : hoje;
+  const ehEdicao = !!e;
+  const ehLegado = ehEdicao && valorPagoSalvo==null;
+  // Campos de qtd/valorPago só são editáveis em: cadastro novo OU edição de legado (pra completar dados)
+  const camposTravados = ehEdicao && !ehLegado;
+  const unitAtual = e ? (parseFloat(e.valorUnitario)||0) : 0;
   document.getElementById('mc').innerHTML=`
     <div class="mbg" onclick="if(event.target===this)cm()">
       <div class="modal">
         <div class="mhdr"><h2>${e?'Editar insumo':'Novo insumo'}</h2><button class="xbtn" onclick="cm()">×</button></div>
-        ${e && valorPagoSalvo==null ? `
+        ${ehLegado ? `
         <div class="card" style="padding:10px 12px;background:var(--amber-50);border-color:var(--amber-100);margin-bottom:12px">
-          <div style="font-size:12px;color:var(--amber-800);line-height:1.4">⚠️ Este insumo foi cadastrado antes do novo sistema. Informe o <b>valor pago real</b> da compra inicial pra completar o histórico.</div>
+          <div style="font-size:12px;color:var(--amber-800);line-height:1.4">⚠️ Este insumo foi cadastrado antes do novo sistema. Informe o <b>valor pago real</b> e a <b>quantidade comprada original</b> pra completar o histórico.</div>
+        </div>`:''}
+        ${camposTravados ? `
+        <div class="card" style="padding:10px 12px;background:var(--bg2);margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text2);line-height:1.4">💡 Aqui você só edita <b>nome</b> e <b>qtd mínima</b>. Pra adicionar mais estoque, use o botão <b>"+ Comprar mais"</b> na lista de insumos — ele faz a média ponderada do valor unitário automaticamente.</div>
         </div>`:''}
         <label>Nome do insumo</label>
         <input id="i_nome" value="${e?e.nome||'':''}" placeholder="Ex: Saquinho transparente, Caixa grande..."/>
         <div class="form-row">
-          <div><label>Qtd comprada</label><input type="number" id="i_qtd" value="${e?e.qtdEstoque||'':'0'}" placeholder="0" step="1" oninput="updInsumoUnit()"/></div>
+          <div>
+            <label>${camposTravados?'Qtd em estoque':'Qtd comprada'}</label>
+            <input type="number" id="i_qtd" value="${e?e.qtdEstoque||'':'0'}" placeholder="0" step="1" ${camposTravados?'readonly style="background:var(--bg2);color:var(--text2);cursor:not-allowed"':'oninput="updInsumoUnit()"'}/>
+          </div>
           <div><label>Qtd mínima (alerta)</label><input type="number" id="i_min" value="${e?e.qtdMinima||'':'5'}" placeholder="5" step="1"/></div>
         </div>
         <label>Valor pago total ($)</label>
-        <input type="number" id="i_valor_pago" value="${valorPagoInicial}" placeholder="0.00" step="0.01" oninput="updInsumoUnit()"/>
+        <input type="number" id="i_valor_pago" value="${valorPagoInicial}" placeholder="0.00" step="0.01" ${camposTravados?'readonly style="background:var(--bg2);color:var(--text2);cursor:not-allowed"':'oninput="updInsumoUnit()"'}/>
         <div class="card" style="padding:10px 12px;background:var(--bg2);margin-bottom:14px;margin-top:-4px">
-          <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Valor unitário (calculado)</div>
-          <div id="i_unit_preview" style="font-size:15px;font-weight:600;color:var(--pink-600)">$ 0.0000</div>
-          <div style="font-size:10px;color:var(--text2);margin-top:2px">Usado nos cálculos de custo de embalagem</div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Valor unitário ${camposTravados?'(atual)':'(calculado)'}</div>
+          <div id="i_unit_preview" style="font-size:15px;font-weight:600;color:var(--pink-600)">$ ${unitAtual.toFixed(4)}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:2px">${camposTravados?'Calculado pela média ponderada das compras':'Usado nos cálculos de custo de embalagem'}</div>
         </div>
         <label>Data da compra</label>
-        <input type="date" id="i_data" value="${dataInicial}"/>
+        <input type="date" id="i_data" value="${dataInicial}" ${camposTravados?'readonly style="background:var(--bg2);color:var(--text2);cursor:not-allowed"':''}/>
         <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="saveInsumo('${e?e.id:''}')">Salvar</button>
       </div>
     </div>`;
-  updInsumoUnit();
+  if(!camposTravados) updInsumoUnit();
 }
 
 function updInsumoUnit(){
@@ -1368,27 +1380,58 @@ function updInsumoUnit(){
 async function saveInsumo(editId){
   const nome=document.getElementById('i_nome').value.trim();
   if(!nome){ toast('Nome é obrigatório','error'); return; }
-  const qtd = parseFloat(document.getElementById('i_qtd').value)||0;
-  const valorPagoInput = document.getElementById('i_valor_pago').value;
-  const valorPago = valorPagoInput===''||valorPagoInput==null ? null : (parseFloat(valorPagoInput)||0);
-  const dataCompra = document.getElementById('i_data').value || new Date().toISOString().slice(0,10);
-  const valorUnitario = (valorPago!=null && qtd>0) ? valorPago/qtd : 0;
 
-  // Estado anterior pra detectar se é um cadastro novo, uma edição "completando o legado", ou só edição normal
+  // Estado anterior — define se é cadastro novo, edição normal, ou edição de legado
   const existing = editId ? S.insumos.find(i=>i.id===editId) : null;
   const eraLegado = existing && (existing.valorPago==null || existing.valorPago==='');
   const ehNovo = !editId;
-  const completandoLegado = !ehNovo && eraLegado && valorPago!=null && valorPago>0;
+  // Edição normal: campos de valor/qtd estão travados, então preserva tudo do existente
+  const ehEdicaoNormal = existing && !eraLegado;
 
-  const insumo={
-    id: editId||('I-'+Date.now()),
-    nome,
-    qtdEstoque: qtd,
-    qtdMinima: parseFloat(document.getElementById('i_min').value)||0,
-    valorUnitario: valorUnitario,
-    valorPago: valorPago,
-    dataCompra: dataCompra,
-  };
+  let insumo;
+  let gastoCriado=null;
+
+  if(ehEdicaoNormal){
+    // Edição normal: só nome e qtd mínima mudam. Preserva resto.
+    insumo={
+      ...existing,
+      nome,
+      qtdMinima: parseFloat(document.getElementById('i_min').value)||0,
+    };
+  } else {
+    // Cadastro novo OU edição de legado: campos liberados, recalcula tudo
+    const qtd = parseFloat(document.getElementById('i_qtd').value)||0;
+    const valorPagoInput = document.getElementById('i_valor_pago').value;
+    const valorPago = valorPagoInput===''||valorPagoInput==null ? null : (parseFloat(valorPagoInput)||0);
+    const dataCompra = document.getElementById('i_data').value || new Date().toISOString().slice(0,10);
+    const valorUnitario = (valorPago!=null && qtd>0) ? valorPago/qtd : 0;
+    const completandoLegado = eraLegado && valorPago!=null && valorPago>0;
+
+    insumo={
+      id: editId||('I-'+Date.now()),
+      nome,
+      qtdEstoque: qtd,
+      qtdMinima: parseFloat(document.getElementById('i_min').value)||0,
+      valorUnitario: valorUnitario,
+      valorPago: valorPago,
+      dataCompra: dataCompra,
+    };
+
+    // Cria gasto vinculado pra cadastro novo ou completando legado
+    if((ehNovo || completandoLegado) && valorPago!=null && valorPago>0 && qtd>0){
+      gastoCriado={
+        id:'G-'+Date.now(),
+        item:`Compra inicial: ${nome} (${qtd} un)`,
+        valor: valorPago,
+        data: dataCompra,
+        categoria:'insumo',
+        insumoId: insumo.id,
+        quantidade: qtd,
+      };
+      S.gastos.push(gastoCriado);
+    }
+  }
+
   if(editId){
     const idx=S.insumos.findIndex(i=>i.id===editId);
     if(idx>=0) S.insumos[idx]=insumo; else S.insumos.push(insumo);
@@ -1396,24 +1439,10 @@ async function saveInsumo(editId){
     S.insumos.push(insumo);
   }
 
-  // Cria gasto vinculado: pra cadastro novo OU quando o usuário está completando um insumo legado
-  let gastoCriado=null;
-  if((ehNovo || completandoLegado) && valorPago!=null && valorPago>0 && qtd>0){
-    gastoCriado={
-      id:'G-'+Date.now(),
-      item:`Compra inicial: ${nome} (${qtd} un)`,
-      valor: valorPago,
-      data: dataCompra,
-      categoria:'insumo',
-      insumoId: insumo.id,
-      quantidade: qtd,
-    };
-    S.gastos.push(gastoCriado);
-  }
-
   saveL(); cm(); render();
   await pushUpsertInsumo(insumo);
   if(gastoCriado) await pushUpsertGasto(gastoCriado);
+  const completandoLegado = eraLegado && insumo.valorPago!=null && insumo.valorPago>0;
   toast(editId?(completandoLegado?`"${nome}" atualizado · gasto registrado`:`"${nome}" atualizado`):`"${nome}" cadastrado`,'success');
 }
 
