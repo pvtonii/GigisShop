@@ -236,6 +236,8 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
+const APP_VERSION = '01';
+const APP_VERSION_DATE = 'May 17, 2026';
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
 const LS = 'gigi_shop_v3';
@@ -2142,6 +2144,9 @@ function renderCfg(){
         <button class="btn btn-primary btn-sm" onclick="updSupabase()">Atualizar</button>
         <button class="btn btn-sm" onclick="syncFromSupabase()">↻ Sincronizar agora</button>
       </div>
+    </div>
+    <div style="text-align:center;padding:16px 0 8px;color:var(--text2);font-size:11px">
+      Versão ${APP_VERSION} · ${APP_VERSION_DATE}
     </div>`;
 }
 async function addTag(k){ const el=document.getElementById('nt_'+k); if(!el||!el.value.trim()) return; const val=el.value.trim(); S.config[k].push(val); saveL(); render(); await pushConfig(); toast(`"${val}" adicionado`,'success'); }
