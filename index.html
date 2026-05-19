@@ -236,7 +236,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '03';
+const APP_VERSION = '04';
 const APP_VERSION_DATE = 'May 18, 2026';
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
@@ -1085,9 +1085,15 @@ function renderInv(){
       (i.localCompra||'').toLowerCase().includes(q)||(i.categoria||'').toLowerCase().includes(q);
   });
   if(invF!=='Todos') items=items.filter(i=>i.categoria===invF);
-  if(invSexo!=='Todos') items=items.filter(i=>(i.sexo||'')===(invSexo==='—'?'':invSexo));
+  if(invSexo!=='Todos') items=items.filter(i=>(i.sexo||'')===invSexo);
   if(invStatus==='Vendidos') items=items.filter(i=>getSV(i.sku)==='Vendido');
-  else if(invStatus==='Ativos') items=items.filter(i=>getSV(i.sku)!=='Vendido');
+  else if(invStatus==='Ativos') items=items.filter(i=>getSV(i.sku)==='Ativo');
+  else if(invStatus==='Em Estoque') items=items.filter(i=>{
+    if(getSV(i.sku)==='Vendido') return false;
+    // sem nenhuma listagem ativa
+    const ativas=S.listagem.filter(l=>l.sku===i.sku && l.status==='Ativo');
+    return ativas.length===0;
+  });
   // Sort
   if(invSort==='az') items=[...items].sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
   else if(invSort==='za') items=[...items].sort((a,b)=>(b.nome||'').localeCompare(a.nome||''));
@@ -1102,7 +1108,7 @@ function renderInv(){
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
       <div class="frow" style="margin:0;flex:1;min-width:0">
-        ${['Todos','Ativos','Vendidos'].map(s=>`<button class="chip ${invStatus===s?'active':''}" onclick="invStatus='${s}';render()">${s}</button>`).join('')}
+        ${['Todos','Em Estoque','Ativos','Vendidos'].map(s=>`<button class="chip ${invStatus===s?'active':''}" onclick="invStatus='${s}';render()">${s}</button>`).join('')}
       </div>
       <select onchange="invSort=this.value;render()" style="width:auto;margin:0;padding:5px 10px;font-size:12px;flex-shrink:0">
         <option value="recente" ${invSort==='recente'?'selected':''}>Mais recente</option>
@@ -1113,9 +1119,13 @@ function renderInv(){
         <option value="lucro" ${invSort==='lucro'?'selected':''}>Maior lucro</option>
       </select>
     </div>
-    <div class="frow">${cats.map(c=>`<button class="chip ${invF===c?'active':''}" onclick="invF='${c}';render()">${c}</button>`).join('')}</div>
     <div class="frow">
-      ${['Todos','F','M','U','—'].map(s=>`<button class="chip ${invSexo===s?'active':''}" onclick="invSexo='${s}';render()">${s==='Todos'?'Todos sexos':s==='—'?'Sem sexo':s}</button>`).join('')}
+      ${['Todos','F','M','U'].map(s=>`<button class="chip ${invSexo===s?'active':''}" onclick="invSexo='${s}';render()">${s==='Todos'?'Todos sexos':s}</button>`).join('')}
+    </div>
+    <div style="margin-bottom:10px">
+      <select onchange="invF=this.value;render()" style="width:100%;margin:0;padding:8px 10px;font-size:14px">
+        ${cats.map(c=>`<option value="${c}" ${invF===c?'selected':''}>${c==='Todos'?'Todas as categorias':c}</option>`).join('')}
+      </select>
     </div>
     ${items.length===0?'<div class="empty">Nenhum item encontrado</div>':`
     <div class="card" style="padding:0 14px">
