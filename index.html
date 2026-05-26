@@ -47,8 +47,8 @@ body{min-height:100vh;margin:0;overflow-x:hidden;background:var(--bg2);}
 .sync-pill .dot{width:6px;height:6px;border-radius:50%;background:var(--gray-400);}
 .sync-pill.syncing{background:var(--amber-50);color:var(--amber-800);border-color:var(--amber-100);}
 .sync-pill.syncing .dot{background:var(--amber-400);}
-.sync-pill.ok{background:var(--teal-50);color:var(--teal-800);border-color:var(--teal-100);}
-.sync-pill.ok .dot{background:var(--teal-400);}
+.sync-pill.ok{background:#344C3D;color:#fff;border-color:#344C3D;}
+.sync-pill.ok .dot{background:#8EA58C;}
 .sync-pill.error{background:var(--coral-50);color:var(--coral-800);border-color:var(--coral-100);}
 .sync-pill.error .dot{background:var(--coral-400);}
 .refresh-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:none;background:transparent;color:var(--pink-600);cursor:pointer;padding:0;flex-shrink:0;transition:background .15s;}
@@ -249,7 +249,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '10';
+const APP_VERSION = '11';
 const APP_VERSION_DATE = 'May 26, 2026';
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
