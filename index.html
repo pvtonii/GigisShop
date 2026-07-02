@@ -254,7 +254,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '12';
+const APP_VERSION = '13';
 const APP_VERSION_DATE = 'Jul 2, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -2040,44 +2040,47 @@ function renderRelReturns(){
       </div>`;
   }
 
-  // Linha de item retornável
-  function rowRet(i, idx){
+  // Card de item retornável
+  function rowRet(i){
     const urgente=i.dias>=20;
-    const corDias = urgente ? 'var(--coral-400)' : i.dias>=15 ? 'var(--amber-800)' : 'var(--text2)';
+    const nivel = urgente ? 'coral' : i.dias>=15 ? 'amber' : 'gray';
+    const borderCor = urgente ? 'var(--coral-400)' : i.dias>=15 ? 'var(--amber-400)' : 'var(--border)';
     const statusBadge = i.sv==='Ativo'
       ? `<span class="badge bg-amber" style="font-size:10px">Listado</span>`
       : `<span class="badge bg-teal" style="font-size:10px">Em Estoque</span>`;
     return `
-      <div class="t5row rel-row" onclick="cm();openItemDetail('${i.sku}')" style="cursor:pointer">
-        ${idx!=null?`<div class="t5n" style="${urgente?'background:var(--coral-50);color:var(--coral-800)':''}">${idx+1}</div>`:''}
-        <div style="flex:1;min-width:0">
-          <div class="iname" style="font-size:13px">${i.nome}${i.sexo?` <span class="badge bg-${i.sexo==='F'?'pink':i.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:2px">${i.sexo}</span>`:''}</div>
-          <div class="isub">${locBadge(i.sku)}<span style="font-weight:500;color:var(--purple-800)">🛍️ ${i.localCompra||'—'}</span>${statusBadge}</div>
+      <div class="card rel-row" onclick="cm();openItemDetail('${i.sku}')" style="cursor:pointer;padding:12px;margin-bottom:8px;border-left:3px solid ${borderCor}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div class="iname" style="font-size:13.5px;margin-bottom:5px">${i.nome}${i.sexo?` <span class="badge bg-${i.sexo==='F'?'pink':i.sexo==='M'?'teal':'gray'}" style="font-size:10px;margin-left:2px">${i.sexo}</span>`:''}</div>
+            <div class="isub">${locBadge(i.sku)}<span style="font-weight:500;color:var(--purple-800)">🛍️ ${i.localCompra||'—'}</span>${statusBadge}</div>
+          </div>
+          <span class="badge bg-${nivel}" style="flex-shrink:0;font-weight:600">${i.dias} ${i.dias===1?'dia':'dias'}</span>
         </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:13px;font-weight:600;color:${corDias}">${i.dias} ${i.dias===1?'dia':'dias'}</div>
-          <div style="font-size:11px;color:var(--text2)">Pago ${fm(i.valorPago)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px;border-top:0.5px solid rgba(0,0,0,.06)">
+          <span style="font-size:11px;color:var(--text2)">Pago ${fm(i.valorPago)}</span>
+          <span style="font-size:11px;color:var(--pink-600);font-weight:500">Ver detalhes ›</span>
         </div>
       </div>`;
   }
 
   return `
     ${urgentes.length>0?`
-    <div class="card" style="margin-bottom:14px;padding:14px;background:var(--coral-50);border-color:var(--coral-100)">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-size:18px">⚠️</span>
+    <div style="margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;padding:0 2px">
+        <span style="font-size:16px">⚠️</span>
         <div style="font-size:14px;font-weight:600;color:var(--coral-800)">Devolver agora — ${urgentes.length} ${urgentes.length===1?'item':'itens'}</div>
       </div>
-      <div style="font-size:11px;color:var(--coral-800);margin-bottom:10px;opacity:.85">≥20 dias em estoque sem vender · prazo de retorno provavelmente vencendo</div>
-      ${urgentes.map((i,idx)=>rowRet(i,idx)).join('')}
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;padding:0 2px">≥20 dias em estoque sem vender · prazo de retorno provavelmente vencendo</div>
+      ${urgentes.map(i=>rowRet(i)).join('')}
     </div>
     `:''}
 
     ${naoUrgentes.length>0?`
-    <div class="card" style="margin-bottom:14px;padding:14px">
-      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px">🔄 Retornáveis em monitoramento</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Itens retornáveis ainda dentro do prazo · fique de olho</div>
-      ${naoUrgentes.map((i,idx)=>rowRet(i,idx)).join('')}
+    <div style="margin-bottom:18px">
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px;padding:0 2px">🔄 Retornáveis em monitoramento</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;padding:0 2px">Itens retornáveis ainda dentro do prazo · fique de olho</div>
+      ${naoUrgentes.map(i=>rowRet(i)).join('')}
     </div>
     `:''}
 
