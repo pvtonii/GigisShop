@@ -254,7 +254,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '13';
+const APP_VERSION = '14';
 const APP_VERSION_DATE = 'Jul 2, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -335,7 +335,7 @@ async function sbDelete(table, col, val){
   if(!r.ok) throw new Error(await r.text());
 }
 
-async function syncFromSupabase(){
+async function syncFromSupabase(silent){
   if(!SB_URL||!SB_KEY) return;
   setSyncUI('syncing','lendo');
   console.log('[sync] Iniciando sincronização...');
@@ -355,32 +355,45 @@ async function syncFromSupabase(){
     // Deduplicate inventory by sku
     const invMap={};
     invRaw.forEach(i=>{ if(i.sku) invMap[i.sku]=i; });
-    S.inventario=Object.values(invMap);
+    const novoInv=Object.values(invMap);
 
     // Deduplicate listagem by id
     const lstMap={};
     lstRaw.forEach(l=>{ if(l.id) lstMap[l.id]=l; });
-    S.listagem=Object.values(lstMap);
+    const novoLst=Object.values(lstMap);
 
-    S.gastos=gastosRaw||[];
-    S.insumos=insumosRaw||[];
+    const novoGastos=gastosRaw||[];
+    const novoInsumos=insumosRaw||[];
 
     // Config stored as key-value rows
+    const novoConfig={...S.config};
     if(cfgRaw&&cfgRaw.length){
       cfgRaw.forEach(row=>{
         if(row.chave&&row.valores){
-          try{ S.config[row.chave]=JSON.parse(row.valores); }catch(e){}
+          try{ novoConfig[row.chave]=JSON.parse(row.valores); }catch(e){}
         }
       });
     }
 
-    saveL(); render();
+    const mudou = JSON.stringify([S.inventario,S.listagem,S.gastos,S.insumos,S.config])
+      !== JSON.stringify([novoInv,novoLst,novoGastos,novoInsumos,novoConfig]);
+
+    S.inventario=novoInv; S.listagem=novoLst; S.gastos=novoGastos; S.insumos=novoInsumos; S.config=novoConfig;
+    saveL();
+
+    // Sync automático (silent) não deve interromper o usuário no meio de uma
+    // edição — só redesenha se algo mudou e não há modal aberto/input focado.
+    const modalAberto = document.getElementById('mc').innerHTML.trim() !== '';
+    const editandoInput = document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)
+      && document.getElementById('content').contains(document.activeElement);
+    if(mudou && !modalAberto && !editandoInput) render();
+
     setSyncUI('ok','sincronizado');
-    toast('Dados sincronizados!','success');
-    console.log('[sync] ✅ Concluído com sucesso');
+    if(!silent || mudou) toast('Dados sincronizados!','success');
+    console.log('[sync] ✅ Concluído com sucesso', {mudou});
   }catch(e){
     setSyncUI('error','sem conexão');
-    toast('Erro ao sincronizar com o Supabase','error');
+    if(!silent) toast('Erro ao sincronizar com o Supabase','error');
     console.error('[sync] ❌ Falhou:', e.message);
     console.error('[sync] Stack:', e.stack);
   }
@@ -2770,7 +2783,7 @@ function dupLst(l){
 function cm(){ document.getElementById('mc').innerHTML=''; }
 // ── INIT ──────────────────────────────────────────────────
 render();
-if(SB_URL&&SB_KEY) syncFromSupabase();
+if(SB_URL&&SB_KEY) syncFromSupabase(true);
 </script>
 </body>
 </html>
