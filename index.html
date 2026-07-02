@@ -56,6 +56,7 @@ body{min-height:100vh;margin:0;overflow-x:hidden;background:var(--bg2);}
 .refresh-btn:active{transform:scale(0.92);}
 .refresh-btn svg{width:16px;height:16px;}
 .refresh-btn.spinning svg{animation:spin 0.8s linear infinite;}
+.ver-label{font-size:9px;color:var(--text2);opacity:.5;flex-shrink:0;margin-right:2px;}
 @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 
 /* ── Mais drawer ─────────────────────────────── */
@@ -86,10 +87,13 @@ body{min-height:100vh;margin:0;overflow-x:hidden;background:var(--bg2);}
 .content{padding:16px;padding-bottom:calc(var(--nav-h) + var(--safe-bottom) + 24px);max-width:430px;margin:0 auto;}
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:80;padding-bottom:env(safe-area-inset-bottom);background:var(--bg);border-top:0.5px solid var(--border);box-shadow:0 -4px 20px rgba(0,0,0,0.08);display:flex;align-items:flex-start;}
 @media(min-width:431px){.tabs{left:50%;right:auto;width:430px;transform:translateX(-50%);}}
-.tab{flex:1;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;border:none;background:transparent;color:var(--gray-400);font-size:10px;font-family:inherit;transition:color .15s;min-height:var(--nav-h);}
-.tab.active{color:var(--pink-600);}
+.tab{flex:1;padding:8px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;border:none;background:transparent;color:var(--gray-400);font-size:10px;font-family:inherit;transition:color .15s;min-height:var(--nav-h);position:relative;}
+.tab.active{color:var(--pink-600);font-weight:600;}
+.tab.active::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:22px;height:3px;border-radius:0 0 4px 4px;background:var(--pink-400);}
+.tab-ico{width:38px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:12px;transition:background .2s ease;}
+.tab.active .tab-ico{background:var(--pink-50);}
 .tab svg{width:18px;height:18px;transition:transform .2s;}
-.tab.active svg{transform:scale(1.1);}
+.tab.active svg{transform:scale(1.08);}
 .stitle{font-size:11px;font-weight:500;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;}
 .card{background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.18);background:transparent;font-size:13px;cursor:pointer;font-family:inherit;color:var(--text);transition:background .12s;}
@@ -211,6 +215,7 @@ label{font-size:12px;color:var(--text2);display:block;margin-bottom:3px;}
   <div class="topbar">
     <div class="logo">G</div>
     <h1>Gigi's Shop</h1>
+    <span class="ver-label" id="verLabel"></span>
     <button class="refresh-btn" id="refreshBtn" onclick="forceRefresh()" title="Atualizar dados">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
     </button>
@@ -220,16 +225,16 @@ label{font-size:12px;color:var(--text2);display:block;margin-bottom:3px;}
 </div>
 <nav class="tabs">
   <button class="tab active" data-tab="dashboard" onclick="go('dashboard')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard
+    <span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></span>Dashboard
   </button>
   <button class="tab" data-tab="inventario" onclick="go('inventario')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>Inventário
+    <span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>Inventário
   </button>
   <button class="tab" data-tab="listagem" onclick="go('listagem')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Listagem
+    <span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>Listagem
   </button>
   <button class="tab" data-tab="mais" onclick="openMaisDrawer()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>Mais
+    <span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>Mais
   </button>
 </nav>
 <button class="fab" id="fab" style="display:none" onclick="fabAction()">＋</button>
@@ -249,8 +254,9 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '11';
-const APP_VERSION_DATE = 'May 26, 2026';
+const APP_VERSION = '12';
+const APP_VERSION_DATE = 'Jul 2, 2026';
+document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
 const LS = 'gigi_shop_v3';
@@ -721,16 +727,10 @@ function renderDash(){
 
   return `
     ${retornaveisUrgentes.length>0?`
-      <div class="card" style="background:var(--coral-50);border-color:var(--coral-100);margin-bottom:12px;cursor:pointer" onclick="go('relatorios');relTab='returns';render()">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;color:var(--coral-800);font-weight:600;margin-bottom:4px">⚠️ ${retornaveisUrgentes.length} ${retornaveisUrgentes.length===1?'item retornável vencido':'itens retornáveis vencidos'}</div>
-            <div style="font-size:12px;color:var(--coral-800);line-height:1.5">
-              ${retornaveisUrgentes.slice(0,3).map(i=>`<b>${i.nome}</b> (${diasEmEstoque(i)}d${i.localCompra?' · '+i.localCompra:''})`).join(' · ')}${retornaveisUrgentes.length>3?` <span style="opacity:.7">+${retornaveisUrgentes.length-3} mais</span>`:''}
-            </div>
-          </div>
-          <span style="color:var(--coral-800);font-size:18px;flex-shrink:0">›</span>
-        </div>
+      <div style="display:flex;align-items:center;gap:8px;background:var(--coral-50);border-radius:20px;padding:7px 12px;margin-bottom:12px;cursor:pointer" onclick="go('relatorios');relTab='returns';render()">
+        <span style="font-size:13px;flex-shrink:0">🔄</span>
+        <span style="flex:1;min-width:0;font-size:12px;color:var(--coral-800)">${retornaveisUrgentes.length} ${retornaveisUrgentes.length===1?'item retornável':'itens retornáveis'} para revisar</span>
+        <span style="color:var(--coral-800);opacity:.6;font-size:15px;flex-shrink:0">›</span>
       </div>
     `:''}
     ${insumosBaixos.length>0?`
