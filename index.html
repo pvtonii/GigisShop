@@ -254,7 +254,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '14';
+const APP_VERSION = '15';
 const APP_VERSION_DATE = 'Jul 2, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -389,7 +389,6 @@ async function syncFromSupabase(silent){
     if(mudou && !modalAberto && !editandoInput) render();
 
     setSyncUI('ok','sincronizado');
-    if(!silent || mudou) toast('Dados sincronizados!','success');
     console.log('[sync] ✅ Concluído com sucesso', {mudou});
   }catch(e){
     setSyncUI('error','sem conexão');
