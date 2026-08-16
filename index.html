@@ -150,12 +150,6 @@ label{font-size:12px;color:var(--text2);display:block;margin-bottom:3px;}
 .t5row:last-child{border-bottom:none;}
 .t5n{width:22px;height:22px;border-radius:50%;background:var(--pink-50);color:var(--pink-800);font-size:11px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .hr{border:none;border-top:0.5px solid rgba(0,0,0,0.08);margin:16px 0;}
-.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.pcard{background:var(--bg2);border-radius:8px;padding:10px 12px;}
-.pname{font-size:11px;color:var(--text2);margin-bottom:6px;font-weight:500;}
-.pstats{display:flex;gap:10px;}
-.pstat{font-size:12px;color:var(--text2);}
-.pstat span{font-weight:500;color:var(--text);display:block;}
 /* fab */
 .fab{position:fixed;bottom:calc(var(--nav-h) + var(--safe-bottom) + 14px);right:18px;width:52px;height:52px;background:var(--pink-400);color:#fff;border:none;border-radius:50%;font-size:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 18px rgba(142,165,140,0.55);z-index:90;transition:transform .15s,box-shadow .15s;line-height:1;}
 .fab:active{transform:scale(0.92);box-shadow:0 2px 8px rgba(142,165,140,0.35);}
@@ -254,7 +248,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '17';
+const APP_VERSION = '18';
 const APP_VERSION_DATE = 'Aug 16, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -714,17 +708,9 @@ function renderDash(){
   const mgs=vends.map(i=>{ const p=parseFloat(i.valorPago)||0; const e=getEmb(i.sku); return p?(getVV(i.sku)-p-e)/p*100:0; });
   const mg=mgs.length?mgs.reduce((a,b)=>a+b,0)/mgs.length:0;
 
-  // Estimativa por plataforma: pega o MAIOR valor entre as listagens ativas de um mesmo SKU
+  // Estimativa de ganho: pega o MAIOR valor entre as listagens ativas de um mesmo SKU
   // (evita somar duplicatas de itens listados em múltiplas plataformas)
-  const plats=S.config.plataformas;
   const activeLst=lst.filter(l=>l.status==='Ativo');
-
-  // Por plataforma: soma independente (cada plataforma tem seu anúncio)
-  const estPorPlat={};
-  plats.forEach(p=>{
-    estPorPlat[p]=activeLst.filter(l=>l.plataforma===p)
-      .reduce((s,l)=>s+(parseFloat(l.valorAlterado)||parseFloat(l.valorListado)||0),0);
-  });
 
   // Total estimativa: para cada SKU ativo, pega apenas o MAIOR valor entre plataformas
   // (para não contar o mesmo item múltiplas vezes no total)
@@ -786,35 +772,12 @@ function renderDash(){
       <div class="msub">Por SKU único — usa o maior valor entre plataformas</div>
     </div>
     <hr class="hr">
-    <p class="stitle">Estimativa por plataforma</p>
-    <div class="pgrid" style="margin-bottom:14px">
-      ${plats.map(p=>`
-        <div class="pcard">
-          <div class="pname">${p}</div>
-          <div style="font-size:16px;font-weight:500;color:var(--teal-600);margin-bottom:4px">${fm(estPorPlat[p])}</div>
-          <div style="font-size:11px;color:var(--text2)">${activeLst.filter(l=>l.plataforma===p).length} anúncios ativos</div>
-        </div>`).join('')}
-    </div>
-    <hr class="hr">
     <p class="stitle">Itens por status</p>
     <div class="mgrid">
       <div class="metric"><div class="mlbl">Em estoque</div><div class="mval">${emEst}</div></div>
       <div class="metric"><div class="mlbl">Ativos</div><div class="mval">${ativos}</div></div>
       <div class="metric"><div class="mlbl">Vendidos</div><div class="mval">${totV}</div></div>
       <div class="metric"><div class="mlbl">Total inventário</div><div class="mval">${inv.length}</div></div>
-    </div>
-    <hr class="hr">
-    <p class="stitle">Anúncios por plataforma</p>
-    <div class="pgrid">
-      ${plats.map(p=>`
-        <div class="pcard">
-          <div class="pname">${p}</div>
-          <div class="pstats">
-            <div class="pstat"><span>${lst.filter(l=>l.plataforma===p&&l.status==='Ativo').length}</span>ativos</div>
-            <div class="pstat"><span>${lst.filter(l=>l.plataforma===p&&l.status==='Vendido').length}</span>vendidos</div>
-            <div class="pstat"><span>${lst.filter(l=>l.plataforma===p).length}</span>total</div>
-          </div>
-        </div>`).join('')}
     </div>
     <hr class="hr">
     <p class="stitle">Lucro semanal</p>
