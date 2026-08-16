@@ -254,8 +254,8 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '15';
-const APP_VERSION_DATE = 'Jul 2, 2026';
+const APP_VERSION = '16';
+const APP_VERSION_DATE = 'Aug 16, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
@@ -431,32 +431,34 @@ async function forceRefresh(){
   }
 }
 
-async function pushUpsert(table, data){ 
+// Falha de push é sempre visível — silenciar isso deixa o usuário achando que salvou quando não salvou
+function syncErr(e){ setSyncUI('error','erro'); toast('Falha ao salvar no Supabase — confira sua conexão e tente de novo','error',5000); console.error(e); }
+async function pushUpsert(table, data){
   if(!SB_URL||!SB_KEY) return;
   setSyncUI('syncing','salvando');
   try{ await sbUpsert(table, data); setSyncUI('ok','salvo'); }
-  catch(e){ setSyncUI('error','erro'); console.error(e); }
+  catch(e){ syncErr(e); }
 }
 async function pushUpsertGasto(g){ await pushUpsert('gastos',g); }
-async function pushDeleteGasto(id){ 
+async function pushDeleteGasto(id){
   if(!SB_URL||!SB_KEY) return;
   setSyncUI('syncing','salvando');
   try{ await sbDelete('gastos','id',id); setSyncUI('ok','salvo'); }
-  catch(e){ setSyncUI('error','erro'); }
+  catch(e){ syncErr(e); }
 }
 async function pushUpsertInsumo(i){ await pushUpsert('insumos',i); }
 async function pushDeleteInsumo(id){
   if(!SB_URL||!SB_KEY) return;
   setSyncUI('syncing','salvando');
   try{ await sbDelete('insumos','id',id); setSyncUI('ok','salvo'); }
-  catch(e){ setSyncUI('error','erro'); }
+  catch(e){ syncErr(e); }
 }
 async function pushDelete(table, id){
   if(!SB_URL||!SB_KEY) return;
   setSyncUI('syncing','salvando');
   const col = table==='inventario'?'sku':'id';
   try{ await sbDelete(table,col,id); setSyncUI('ok','salvo'); }
-  catch(e){ setSyncUI('error','erro'); console.error(e); }
+  catch(e){ syncErr(e); }
 }
 async function pushConfig(){
   if(!SB_URL||!SB_KEY) return;
@@ -465,7 +467,7 @@ async function pushConfig(){
     const rows=Object.entries(S.config).map(([chave,valores])=>({chave,valores:JSON.stringify(valores)}));
     await sbUpsert('config',rows);
     setSyncUI('ok','salvo');
-  }catch(e){ setSyncUI('error','erro'); }
+  }catch(e){ syncErr(e); }
 }
 
 // ── HELPERS ────────────────────────────────────────────────
@@ -2432,7 +2434,9 @@ async function saveInv(editSku){
   }
   S.inventario=S.inventario.filter(i=>i.sku!==item.sku);
   S.inventario.push(item);
-  saveL(); cm(); render(); await pushUpsert('inventario',item);
+  saveL();
+  await pushUpsert('inventario',item);
+  cm(); render();
   toast(editSku?`"${item.nome}" atualizado`:`"${item.nome}" adicionado ao inventário`,'success');
 }
 
@@ -2639,10 +2643,13 @@ async function saveLst(editId){
     S.listagem=S.listagem.filter(l=>!toDelete.includes(l.id));
   }
   const inv=S.inventario.find(i=>i.sku===sku);
-  if(inv){ inv.statusItem='Listado'; await pushUpsert('inventario',inv); }
-  saveL(); cm(); render();
+  if(inv) inv.statusItem='Listado';
+  saveL();
+  // Confirma no Supabase antes de fechar o modal, pra não perder o anúncio se o usuário seguir em frente antes do envio terminar
   await pushUpsert('listagem',listing);
+  if(inv) await pushUpsert('inventario',inv);
   for(const id of toDelete){ await pushDelete('listagem',id); }
+  cm(); render();
   const nomeLst=inv?inv.nome:sku;
   if(status==='Vendido') toast(`"${nomeLst}" marcado como vendido! 🎉`,'success');
   else if(editId) toast(`Anúncio de "${nomeLst}" atualizado`,'success');
