@@ -254,7 +254,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '16';
+const APP_VERSION = '17';
 const APP_VERSION_DATE = 'Aug 16, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -306,16 +306,25 @@ function sbHeaders(){
 }
 
 async function sbGet(table, params=''){
-  // PostgREST padrão do Supabase já não tem cache HTTP. Não adicionamos headers extras
-  // nem parâmetros de URL pra evitar problemas de CORS e queries inválidas.
-  const url=SB_URL+'/rest/v1/'+table+'?'+params;
-  const r=await fetch(url, { headers: sbHeaders() });
-  if(!r.ok){
-    const errText=await r.text();
-    console.error('[sbGet] '+table+' falhou:', r.status, errText);
-    throw new Error('GET '+table+' '+r.status+': '+errText);
+  // O PostgREST do Supabase limita cada resposta a 1000 linhas por padrão — sem
+  // paginar aqui, tabelas grandes (ex: listagem) perdiam silenciosamente as linhas
+  // mais recentes numa query order=created_at.asc.
+  const pageSize=1000;
+  let offset=0, all=[];
+  while(true){
+    const url=SB_URL+'/rest/v1/'+table+'?'+params+`&limit=${pageSize}&offset=${offset}`;
+    const r=await fetch(url, { headers: sbHeaders() });
+    if(!r.ok){
+      const errText=await r.text();
+      console.error('[sbGet] '+table+' falhou:', r.status, errText);
+      throw new Error('GET '+table+' '+r.status+': '+errText);
+    }
+    const batch=await r.json();
+    all=all.concat(batch);
+    if(batch.length<pageSize) break;
+    offset+=pageSize;
   }
-  return r.json();
+  return all;
 }
 
 async function sbUpsert(table, data){
