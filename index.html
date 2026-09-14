@@ -248,8 +248,8 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '18';
-const APP_VERSION_DATE = 'Aug 16, 2026';
+const APP_VERSION = '19';
+const APP_VERSION_DATE = 'Sep 13, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
@@ -759,6 +759,7 @@ function renderDash(){
     <div class="mgrid">
       <div class="metric"><div class="mlbl">Total investido</div><div class="mval">${fm(totalInvestido)}</div><div class="msub">Mercadoria + fixos + insumos</div></div>
       <div class="metric"><div class="mlbl">Total em mercadoria</div><div class="mval">${fm(totalMercadoria)}</div><div class="msub">${inv.length} ${inv.length===1?'peça':'peças'}</div></div>
+      <div class="metric"><div class="mlbl">Mercadoria vendida</div><div class="mval">${fm(totalPagoVend)}</div><div class="msub">${vends.length} ${vends.length===1?'peça vendida':'peças vendidas'} · valor pago</div></div>
       <div class="metric"><div class="mlbl">Custos fixos</div><div class="mval" style="color:var(--coral-400)">${fm(totalFixos)}</div></div>
       <div class="metric"><div class="mlbl">Insumos</div><div class="mval" style="color:var(--coral-400)">${fm(totalInsumos)}</div></div>
       <div class="metric"><div class="mlbl">Total arrecadado</div><div class="mval">${fm(totalVV)}</div></div>
