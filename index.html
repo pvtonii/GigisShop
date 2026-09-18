@@ -249,7 +249,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '23';
+const APP_VERSION = '24';
 const APP_VERSION_DATE = 'Sep 17, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -735,8 +735,8 @@ function renderDash(){
   const top5=[...vendsUniq].map(i=>({...i,lucro:getVV(i.sku)-(parseFloat(i.valorPago)||0)-getEmb(i.sku)}))
     .sort((a,b)=>b.lucro-a.lucro).slice(0,5);
 
-  // Aguardando envio: vendido mas sem código de rastreio ainda (nenhum status novo, só um lembrete visual)
-  const aEnviar=lst.filter(l=>l.status==='Vendido'&&!l.trackingCode)
+  // Aguardando envio: vendido mas ainda não marcado como enviado (lembrete visual)
+  const aEnviar=lst.filter(l=>l.status==='Vendido'&&!l.enviado)
     .map(l=>{
       const invItem=inv.find(i=>i.sku===l.sku);
       const dv=l.dataVenda?new Date(l.dataVenda+'T12:00:00'):null;
@@ -783,7 +783,7 @@ function renderDash(){
           ${l.dias!=null?`<span class="badge bg-${urgente?'coral':'amber'}" style="flex-shrink:0;font-weight:600">${l.dias} ${l.dias===1?'dia':'dias'}</span>`:''}
         </div>
         <div style="margin-top:10px;padding-top:8px;border-top:0.5px solid rgba(0,0,0,.06)">
-          <button class="btn btn-sm btn-primary" style="width:100%" onclick="addTrackingPrompt('${l.id}')">📦 Adicionar rastreio</button>
+          <button class="btn btn-sm btn-primary" style="width:100%" onclick="marcarEnviado('${l.id}')">✓ Marcar como enviado</button>
         </div>
       </div>`;
     }).join('')}
@@ -1265,6 +1265,14 @@ async function saveTrackingCode(listingId){
   }else{
     toast('Rastreio removido','info');
   }
+}
+async function marcarEnviado(listingId){
+  const l=S.listagem.find(x=>x.id===listingId);
+  if(!l){ toast('Anúncio não encontrado','error'); return; }
+  l.enviado=true;
+  saveL(); render();
+  await pushUpsert('listagem',l);
+  toast('Marcado como enviado','success');
 }
 
 // ── LISTAGEM ──────────────────────────────────────────────
