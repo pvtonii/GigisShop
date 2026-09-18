@@ -249,7 +249,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '22';
+const APP_VERSION = '23';
 const APP_VERSION_DATE = 'Sep 17, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -735,6 +735,16 @@ function renderDash(){
   const top5=[...vendsUniq].map(i=>({...i,lucro:getVV(i.sku)-(parseFloat(i.valorPago)||0)-getEmb(i.sku)}))
     .sort((a,b)=>b.lucro-a.lucro).slice(0,5);
 
+  // Aguardando envio: vendido mas sem código de rastreio ainda (nenhum status novo, só um lembrete visual)
+  const aEnviar=lst.filter(l=>l.status==='Vendido'&&!l.trackingCode)
+    .map(l=>{
+      const invItem=inv.find(i=>i.sku===l.sku);
+      const dv=l.dataVenda?new Date(l.dataVenda+'T12:00:00'):null;
+      const dias=dv?Math.max(0,Math.round((new Date().setHours(12,0,0,0)-dv)/86400000)):null;
+      return {...l, nome:invItem?invItem.nome:l.sku, dias};
+    })
+    .sort((a,b)=>(b.dias||0)-(a.dias||0));
+
   return `
     ${retornaveisUrgentes.length>0?`
       <div style="display:flex;align-items:center;gap:8px;background:var(--coral-50);border-radius:20px;padding:7px 12px;margin-bottom:12px;cursor:pointer" onclick="go('relatorios');relTab='returns';render()">
@@ -755,6 +765,29 @@ function renderDash(){
           <span style="color:var(--amber-800);font-size:18px;flex-shrink:0">›</span>
         </div>
       </div>
+    `:''}
+    ${aEnviar.length>0?`
+    <p class="stitle">📦 Aguardando envio (${aEnviar.length})</p>
+    ${aEnviar.map(l=>{
+      const urgente=l.dias!=null&&l.dias>=3;
+      return `
+      <div class="card" style="padding:12px;margin-bottom:8px;border-left:3px solid ${urgente?'var(--coral-400)':'var(--amber-400)'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div class="iname" style="font-size:13.5px;margin-bottom:5px">${l.nome}</div>
+            <div class="isub">
+              <span style="background:var(--purple-50);color:var(--purple-800);padding:2px 7px;border-radius:20px;font-size:11px">${l.plataforma||'—'}</span>
+              <span>${fm(l.valorVendido)}</span>
+            </div>
+          </div>
+          ${l.dias!=null?`<span class="badge bg-${urgente?'coral':'amber'}" style="flex-shrink:0;font-weight:600">${l.dias} ${l.dias===1?'dia':'dias'}</span>`:''}
+        </div>
+        <div style="margin-top:10px;padding-top:8px;border-top:0.5px solid rgba(0,0,0,.06)">
+          <button class="btn btn-sm btn-primary" style="width:100%" onclick="addTrackingPrompt('${l.id}')">📦 Adicionar rastreio</button>
+        </div>
+      </div>`;
+    }).join('')}
+    <hr class="hr">
     `:''}
     <p class="stitle">Resumo financeiro</p>
     <div class="mgrid">
