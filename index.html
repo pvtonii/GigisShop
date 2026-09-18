@@ -37,9 +37,10 @@
   --nav-h:60px;
 }
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-tap-highlight-color:transparent;}
-html{overflow-x:hidden;touch-action:manipulation;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;}
-body{min-height:100vh;margin:0;overflow-x:hidden;background:var(--bg2);}
-#app{max-width:430px;margin:0 auto;background:var(--bg);}
+html{overflow-x:hidden;touch-action:manipulation;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;overscroll-behavior:none;}
+body{min-height:100vh;margin:0;overflow-x:hidden;background:var(--bg2);overscroll-behavior:none;}
+body.modal-open{position:fixed;left:0;right:0;width:100%;overflow:hidden;}
+#app{max-width:430px;margin:0 auto;background:var(--bg);overflow-x:hidden;}
 .topbar{background:var(--pink-50);border-bottom:0.5px solid var(--pink-100);padding:calc(var(--safe-top) + 10px) 16px 10px;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:50;}
 .topbar h1{font-size:16px;font-weight:500;color:var(--pink-800);flex:1;}
 .logo{width:28px;height:28px;border-radius:50%;background:var(--pink-400);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:#fff;flex-shrink:0;}
@@ -61,7 +62,7 @@ body{min-height:100vh;margin:0;overflow-x:hidden;background:var(--bg2);}
 
 /* ── Mais drawer ─────────────────────────────── */
 .drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:150;animation:fade-in .18s ease-out;display:flex;align-items:flex-end;justify-content:center;}
-.drawer{position:relative;width:100%;max-width:430px;background:var(--bg);border-radius:16px 16px 0 0;padding:16px 16px calc(var(--safe-bottom) + 28px);animation:slide-up .22s ease-out;box-shadow:0 -8px 24px rgba(0,0,0,.18);}
+.drawer{position:relative;width:100%;max-width:430px;background:var(--bg);border-radius:16px 16px 0 0;padding:16px 16px calc(var(--safe-bottom) + 28px);animation:slide-up .22s ease-out;box-shadow:0 -8px 24px rgba(0,0,0,.18);overflow-x:hidden;}
 .drawer-grip{width:36px;height:4px;background:var(--text2);opacity:.3;border-radius:2px;margin:0 auto 14px;}
 .drawer-title{font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;font-weight:500;margin:0 0 10px 4px;}
 .drawer-item{display:flex;align-items:center;gap:14px;padding:14px 12px;border-radius:10px;cursor:pointer;transition:background .15s;}
@@ -132,7 +133,7 @@ label{font-size:12px;color:var(--text2);display:block;margin-bottom:3px;}
 .chip.active{background:var(--pink-400);color:#fff;border-color:var(--pink-400);}
 .empty{text-align:center;color:var(--text2);font-size:14px;padding:32px 0;}
 .mbg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;}
-.modal{background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:430px;max-height:88vh;overflow-y:auto;padding:20px 16px 40px;}
+.modal{background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:430px;max-height:88vh;overflow-y:auto;overflow-x:hidden;padding:20px 16px 40px;}
 .mhdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
 .mhdr h2{font-size:16px;font-weight:500;color:var(--text);}
 .xbtn{background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-400);padding:0 4px;line-height:1;}
@@ -248,8 +249,8 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '21';
-const APP_VERSION_DATE = 'Sep 13, 2026';
+const APP_VERSION = '22';
+const APP_VERSION_DATE = 'Sep 17, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
@@ -2760,6 +2761,28 @@ function dupLst(l){
   openLstModal(dup);
 }
 function cm(){ document.getElementById('mc').innerHTML=''; }
+
+// ── SCROLL LOCK (trava o fundo enquanto um modal/drawer está aberto) ───────
+let scrollLockY=0;
+function setModalOpen(open){
+  const isOpen=document.body.classList.contains('modal-open');
+  if(open&&!isOpen){
+    scrollLockY=window.scrollY;
+    document.body.style.top=(-scrollLockY)+'px';
+    document.body.classList.add('modal-open');
+  }else if(!open&&isOpen){
+    document.body.classList.remove('modal-open');
+    document.body.style.top='';
+    window.scrollTo(0,scrollLockY);
+  }
+}
+function refreshModalLock(){
+  const open=document.getElementById('mc').innerHTML.trim()!==''||!!document.getElementById('maisDrawer');
+  setModalOpen(open);
+}
+new MutationObserver(refreshModalLock).observe(document.getElementById('mc'),{childList:true});
+new MutationObserver(refreshModalLock).observe(document.body,{childList:true});
+
 // ── INIT ──────────────────────────────────────────────────
 render();
 if(SB_URL&&SB_KEY) syncFromSupabase(true);
