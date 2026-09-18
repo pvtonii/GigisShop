@@ -249,8 +249,8 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '25';
-const APP_VERSION_DATE = 'Sep 17, 2026';
+const APP_VERSION = '26';
+const APP_VERSION_DATE = 'Sep 18, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
@@ -669,6 +669,7 @@ function render(){
   else if(tab==='listagem') c.innerHTML=renderLst();
   else if(tab==='gastos') c.innerHTML=renderGastos();
   else if(tab==='relatorios') c.innerHTML=renderRel();
+  else if(tab==='envios') c.innerHTML=renderEnvios();
   else c.innerHTML=renderCfg();
 }
 
@@ -743,15 +744,7 @@ function renderDash(){
   const top5=[...vendsUniq].map(i=>({...i,lucro:getVV(i.sku)-(parseFloat(i.valorPago)||0)-getEmb(i.sku)}))
     .sort((a,b)=>b.lucro-a.lucro).slice(0,5);
 
-  // Aguardando envio: vendido mas ainda não marcado como enviado (lembrete visual)
-  const aEnviar=lst.filter(l=>l.status==='Vendido'&&!l.enviado)
-    .map(l=>{
-      const invItem=inv.find(i=>i.sku===l.sku);
-      const dv=l.dataVenda?new Date(l.dataVenda+'T12:00:00'):null;
-      const dias=dv?Math.max(0,Math.round((new Date().setHours(12,0,0,0)-dv)/86400000)):null;
-      return {...l, nome:invItem?invItem.nome:l.sku, dias};
-    })
-    .sort((a,b)=>(b.dias||0)-(a.dias||0));
+  const aEnviar=getAguardandoEnvio();
 
   return `
     ${retornaveisUrgentes.length>0?`
@@ -775,27 +768,12 @@ function renderDash(){
       </div>
     `:''}
     ${aEnviar.length>0?`
-    <p class="stitle">📦 Aguardando envio (${aEnviar.length})</p>
-    ${aEnviar.map(l=>{
-      const urgente=l.dias!=null&&l.dias>=3;
-      return `
-      <div class="card" style="padding:12px;margin-bottom:8px;border-left:3px solid ${urgente?'var(--coral-400)':'var(--amber-400)'}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-          <div style="flex:1;min-width:0">
-            <div class="iname" style="font-size:13.5px;margin-bottom:5px">${l.nome}</div>
-            <div class="isub">
-              <span style="background:var(--purple-50);color:var(--purple-800);padding:2px 7px;border-radius:20px;font-size:11px">${l.plataforma||'—'}</span>
-              <span>${fm(l.valorVendido)}</span>
-            </div>
-          </div>
-          ${l.dias!=null?`<span class="badge bg-${urgente?'coral':'amber'}" style="flex-shrink:0;font-weight:600">${l.dias} ${l.dias===1?'dia':'dias'}</span>`:''}
+      <div class="card" style="background:var(--teal-50);border-color:var(--teal-100);margin-bottom:12px;cursor:pointer" onclick="go('envios')">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div style="font-size:13px;color:var(--teal-800);font-weight:600">📦 ${aEnviar.length} ${aEnviar.length===1?'item aguardando envio':'itens aguardando envio'}</div>
+          <span style="color:var(--teal-800);font-size:18px;flex-shrink:0">›</span>
         </div>
-        <div style="margin-top:10px;padding-top:8px;border-top:0.5px solid rgba(0,0,0,.06)">
-          <button class="btn btn-sm btn-primary" style="width:100%" onclick="marcarEnviado('${l.id}')">✓ Marcar como enviado</button>
-        </div>
-      </div>`;
-    }).join('')}
-    <hr class="hr">
+      </div>
     `:''}
     <p class="stitle">Resumo financeiro</p>
     <div class="mgrid">
@@ -844,6 +822,54 @@ function renderDash(){
     </div>`:''}`;
 }
 
+// Vendido mas ainda não marcado como enviado (lembrete visual, sem status novo)
+function getAguardandoEnvio(){
+  return S.listagem.filter(l=>l.status==='Vendido'&&!l.enviado)
+    .map(l=>{
+      const invItem=S.inventario.find(i=>i.sku===l.sku);
+      const dv=l.dataVenda?new Date(l.dataVenda+'T12:00:00'):null;
+      const dias=dv?Math.max(0,Math.round((new Date().setHours(12,0,0,0)-dv)/86400000)):null;
+      return {...l, nome:invItem?invItem.nome:l.sku, dias};
+    })
+    .sort((a,b)=>(b.dias||0)-(a.dias||0));
+}
+
+// ── AGUARDANDO ENVIO (página exclusiva) ────────────────────
+function renderEnvios(){
+  const items=getAguardandoEnvio();
+  return `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;cursor:pointer" onclick="go('dashboard')">
+      <span style="font-size:18px;color:var(--text2)">‹</span>
+      <span style="font-size:13px;font-weight:500;color:var(--text2)">Dashboard</span>
+    </div>
+    <p class="stitle">📦 Aguardando envio (${items.length})</p>
+    ${items.length===0?`
+      <div class="card" style="padding:24px 14px;text-align:center">
+        <div style="font-size:32px;margin-bottom:8px">📭</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">Nada pendente</div>
+        <div style="font-size:12px;color:var(--text2)">Todo item vendido já foi marcado como enviado.</div>
+      </div>
+    `:items.map(l=>{
+      const urgente=l.dias!=null&&l.dias>=3;
+      return `
+      <div class="card" style="padding:12px;margin-bottom:8px;border-left:3px solid ${urgente?'var(--coral-400)':'var(--amber-400)'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div class="iname" style="font-size:13.5px;margin-bottom:5px">${l.nome}</div>
+            <div class="isub">
+              <span style="background:var(--purple-50);color:var(--purple-800);padding:2px 7px;border-radius:20px;font-size:11px">${l.plataforma||'—'}</span>
+              <span>${fm(l.valorVendido)}</span>
+            </div>
+          </div>
+          ${l.dias!=null?`<span class="badge bg-${urgente?'coral':'amber'}" style="flex-shrink:0;font-weight:600">${l.dias} ${l.dias===1?'dia':'dias'}</span>`:''}
+        </div>
+        <div style="margin-top:10px;padding-top:8px;border-top:0.5px solid rgba(0,0,0,.06)">
+          <button class="btn btn-sm btn-primary" style="width:100%" onclick="marcarEnviado('${l.id}')">✓ Marcar como enviado</button>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+}
 
 // ── WEEKLY REPORT ─────────────────────────────────────────
 function renderWeekly(lst,inv){
