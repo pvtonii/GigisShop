@@ -249,7 +249,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '24';
+const APP_VERSION = '25';
 const APP_VERSION_DATE = 'Sep 17, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -475,6 +475,14 @@ async function pushConfig(){
 }
 
 // ── HELPERS ────────────────────────────────────────────────
+// Busca por palavras soltas: "lauren shorts" bate com "Ralph Lauren Denim Shorts"
+// mesmo fora de ordem/adjacência — cada palavra só precisa aparecer em algum lugar
+function matchWords(haystack, query){
+  const words=(query||'').toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if(!words.length) return true;
+  const h=(haystack||'').toLowerCase();
+  return words.every(w=>h.includes(w));
+}
 function genSKU(){
   const nums=S.inventario.map(i=>{
     const m=String(i.sku||'').match(/^GP-(\d+)$/);
@@ -1128,11 +1136,9 @@ function cycleInvSexo(){
 
 function renderInv(){
   const cats=['Todos',...S.config.categorias];
-  let items=S.inventario.filter(i=>{
-    const q=invQ.toLowerCase();
-    return !q||(i.nome||'').toLowerCase().includes(q)||(i.localizacao||'').toLowerCase().includes(q)||
-      (i.localCompra||'').toLowerCase().includes(q)||(i.categoria||'').toLowerCase().includes(q);
-  });
+  let items=S.inventario.filter(i=>
+    matchWords([i.nome,i.localizacao,i.localCompra,i.categoria].join(' '), invQ)
+  );
   if(invF!=='Todos') items=items.filter(i=>i.categoria===invF);
   if(invSexo!=='Todos') items=items.filter(i=>(i.sexo||'')===invSexo);
   if(invStatus==='Vendidos') items=items.filter(i=>getSV(i.sku)==='Vendido');
@@ -1279,9 +1285,8 @@ async function marcarEnviado(listingId){
 function renderLst(){
   const plats=['Todos',...S.config.plataformas];
   let items=S.listagem.filter(l=>{
-    const q=lstQ.toLowerCase(), inv=S.inventario.find(i=>i.sku===l.sku);
-    return !q||((inv&&inv.localizacao)||'').toLowerCase().includes(q)||(l.plataforma||'').toLowerCase().includes(q)||
-      ((inv&&inv.nome)||'').toLowerCase().includes(q);
+    const inv=S.inventario.find(i=>i.sku===l.sku);
+    return matchWords([inv&&inv.localizacao, l.plataforma, inv&&inv.nome].join(' '), lstQ);
   });
   if(lstF!=='Todos') items=items.filter(l=>l.plataforma===lstF);
   return `
@@ -1344,8 +1349,7 @@ function renderGastosFixos(){
   const totalGeral=gastos.reduce((s,g)=>s+(parseFloat(g.valor)||0),0);
   // Busca
   if(gastosFQ){
-    const q=gastosFQ.toLowerCase();
-    gastos=gastos.filter(g=>(g.item||'').toLowerCase().includes(q));
+    gastos=gastos.filter(g=>matchWords(g.item, gastosFQ));
   }
   // Ordenação
   if(gastosFSort==='antigo') gastos=[...gastos].sort((a,b)=>(a.data||'').localeCompare(b.data||''));
@@ -2183,12 +2187,7 @@ function renderRelTempo(sold){
   const top5Encalhados=emEstoque.slice(0,5);
   const qBusca=(estoqueQ||'').toLowerCase().trim();
   const buscaResultados=qBusca
-    ? emEstoque.filter(i=>
-        (i.nome||'').toLowerCase().includes(qBusca) ||
-        (i.localizacao||'').toLowerCase().includes(qBusca) ||
-        (i.categoria||'').toLowerCase().includes(qBusca) ||
-        (i.localCompra||'').toLowerCase().includes(qBusca)
-      ).slice(0,20)
+    ? emEstoque.filter(i=>matchWords([i.nome,i.localizacao,i.categoria,i.localCompra].join(' '), qBusca)).slice(0,20)
     : [];
 
   // Cor do "tempo encalhado" baseada em dias
@@ -2343,9 +2342,7 @@ function buildAC(inputId, dropId, hiddenId){
   if(!inp||!drop) return;
   inp.addEventListener('input',()=>{
     const q=inp.value.toLowerCase();
-    const matches=S.inventario.filter(i=>
-      (i.nome||'').toLowerCase().includes(q)||(i.sku||'').toLowerCase().includes(q)
-    ).slice(0,50);
+    const matches=S.inventario.filter(i=>matchWords([i.nome,i.sku].join(' '), q)).slice(0,50);
     if(!q||matches.length===0){ drop.className='ac-drop'; return; }
     drop.innerHTML=matches.map((i,idx)=>
       `<div class="ac-item" data-idx="${idx}" data-sku="${i.sku}" onclick="selectAC('${inputId}','${dropId}','${hiddenId}','${i.sku}','${i.nome.replace(/'/g,"&#39;")}')">
