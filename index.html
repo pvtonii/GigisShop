@@ -249,7 +249,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '27';
+const APP_VERSION = '28';
 const APP_VERSION_DATE = 'Sep 18, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -857,6 +857,7 @@ function renderEnvios(){
           <div style="flex:1;min-width:0">
             <div class="iname" style="font-size:13.5px;margin-bottom:5px">${l.nome}</div>
             <div class="isub">
+              ${locBadge(l.sku)}
               <span style="background:var(--purple-50);color:var(--purple-800);padding:2px 7px;border-radius:20px;font-size:11px">${l.plataforma||'—'}</span>
               <span>${fm(l.valorVendido)}</span>
             </div>
