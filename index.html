@@ -249,8 +249,8 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '29';
-const APP_VERSION_DATE = 'Sep 21, 2026';
+const APP_VERSION = '30';
+const APP_VERSION_DATE = 'Sep 25, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
@@ -719,6 +719,8 @@ function renderDash(){
   const totalEmb=vends.reduce((s,i)=>s+getEmb(i.sku),0);
   const totalPagoVend=vends.reduce((s,i)=>s+(parseFloat(i.valorPago)||0),0);
   const lucroTotal=totalVV-totalPagoVend-totalEmb;
+  // Lucro real: tudo que já entrou de venda menos tudo que já saiu do bolso (mercadoria toda, vendida ou não, + fixos + insumos)
+  const lucroReal=totalVV-totalInvestido;
   const mgs=vends.map(i=>{ const p=parseFloat(i.valorPago)||0; const e=getEmb(i.sku); return p?(getVV(i.sku)-p-e)/p*100:0; });
   const mg=mgs.length?mgs.reduce((a,b)=>a+b,0)/mgs.length:0;
 
@@ -790,6 +792,11 @@ function renderDash(){
       <div class="metric"><div class="mlbl">Insumos</div><div class="mval" style="color:var(--coral-400)">${fm(totalInsumos)}</div></div>
       <div class="metric"><div class="mlbl">Custo embalagens</div><div class="mval" style="color:var(--coral-400)">${fm(totalEmb)}</div></div>
       <div class="metric"><div class="mlbl">Margem média</div><div class="mval">${mg.toFixed(1)}%</div></div>
+    </div>
+    <div class="metric" style="margin-bottom:14px">
+      <div class="mlbl">Lucro real</div>
+      <div class="mval ${lucroReal>=0?'pos':'neg'}">${fm(lucroReal)}</div>
+      <div class="msub">Total arrecadado − Total investido (mercadoria toda + fixos + insumos, vendidos ou não)</div>
     </div>
     <div class="metric" style="margin-bottom:14px">
       <div class="mlbl">Estimativa de ganho total (sem duplicatas de SKU)</div>
