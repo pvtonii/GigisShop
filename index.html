@@ -249,7 +249,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '30';
+const APP_VERSION = '31';
 const APP_VERSION_DATE = 'Sep 25, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -787,16 +787,12 @@ function renderDash(){
       <div class="metric"><div class="mlbl">Total em mercadoria</div><div class="mval">${fm(totalMercadoria)}</div><div class="msub">${inv.length} ${inv.length===1?'peça':'peças'}</div></div>
       <div class="metric"><div class="mlbl">Mercadoria vendida</div><div class="mval">${fm(totalPagoVend)}</div><div class="msub">${vends.length} ${vends.length===1?'peça vendida':'peças vendidas'}</div></div>
       <div class="metric"><div class="mlbl">Lucro total</div><div class="mval ${lucroTotal>=0?'pos':'neg'}">${fm(lucroTotal)}</div><div class="msub">Já descontando embalagens</div></div>
+      <div class="metric"><div class="mlbl">Lucro real</div><div class="mval ${lucroReal>=0?'pos':'neg'}">${fm(lucroReal)}</div><div class="msub">Arrecadado − investido total</div></div>
       <div class="metric"><div class="mlbl">Total arrecadado</div><div class="mval">${fm(totalVV)}</div></div>
       <div class="metric"><div class="mlbl">Custos fixos</div><div class="mval" style="color:var(--coral-400)">${fm(totalFixos)}</div></div>
       <div class="metric"><div class="mlbl">Insumos</div><div class="mval" style="color:var(--coral-400)">${fm(totalInsumos)}</div></div>
       <div class="metric"><div class="mlbl">Custo embalagens</div><div class="mval" style="color:var(--coral-400)">${fm(totalEmb)}</div></div>
       <div class="metric"><div class="mlbl">Margem média</div><div class="mval">${mg.toFixed(1)}%</div></div>
-    </div>
-    <div class="metric" style="margin-bottom:14px">
-      <div class="mlbl">Lucro real</div>
-      <div class="mval ${lucroReal>=0?'pos':'neg'}">${fm(lucroReal)}</div>
-      <div class="msub">Total arrecadado − Total investido (mercadoria toda + fixos + insumos, vendidos ou não)</div>
     </div>
     <div class="metric" style="margin-bottom:14px">
       <div class="mlbl">Estimativa de ganho total (sem duplicatas de SKU)</div>
