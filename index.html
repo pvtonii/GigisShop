@@ -85,6 +85,13 @@ body.modal-open{position:fixed;left:0;right:0;width:100%;overflow:hidden;}
 .rel-bar-row{cursor:pointer;padding:8px 4px;margin:0 -4px;border-radius:6px;transition:background .12s;}
 .rel-bar-row:hover{background:var(--pink-50);}
 .rel-bar-row:active{background:var(--pink-100);}
+.vbar-wrap{display:flex;align-items:flex-end;gap:3px;height:120px;margin-bottom:2px;}
+.vbar-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;cursor:pointer;border-radius:6px;transition:background .12s;padding-top:2px;}
+.vbar-col:active{background:var(--pink-50);}
+.vbar-val{font-size:9px;color:var(--text2);margin-bottom:3px;font-weight:600;white-space:nowrap;}
+.vbar-bar{width:100%;max-width:22px;border-radius:4px 4px 2px 2px;transition:height .25s;min-height:2px;}
+.vbar-lbl{font-size:9.5px;color:var(--text2);margin-top:5px;}
+.vbar-lbl.champ{color:var(--teal-600);font-weight:700;}
 .content{padding:16px;padding-bottom:calc(var(--nav-h) + var(--safe-bottom) + 24px);max-width:430px;margin:0 auto;}
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:80;padding-bottom:env(safe-area-inset-bottom);background:var(--bg);border-top:0.5px solid var(--border);box-shadow:0 -4px 20px rgba(0,0,0,0.08);display:flex;align-items:flex-start;}
 @media(min-width:431px){.tabs{left:50%;right:auto;width:430px;transform:translateX(-50%);}}
@@ -249,7 +256,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '32';
+const APP_VERSION = '33';
 const APP_VERSION_DATE = 'Oct 1, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -267,7 +274,7 @@ let S = {
     statusItem:['Em Estoque','Listado'],
   }
 };
-let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos', invSexo='Todos', gastosFQ='', gastosFSort='recente', relTab='performance', estoqueQ='';
+let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos', invSexo='Todos', gastosFQ='', gastosFSort='recente', relTab='performance', estoqueQ='', relMetricMes='count', relMetricSemana='count';
 try{ const s=localStorage.getItem(LS); if(s) S=JSON.parse(s); }catch(e){}
 function saveL(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
 
@@ -2175,7 +2182,6 @@ function renderRelTempo(sold){
       porMes[m].items.push(s);
     }
   });
-  const maxRec=Math.max(...porMes.map(m=>m.receita),1);
 
   // 2. Vendas por mês — últimos 12 meses, com ano
   const ultimos12={};
@@ -2205,7 +2211,9 @@ function renderRelTempo(sold){
   const maxDias = comDias.length ? Math.max(...comDias.map(x=>x.dias)) : 0;
 
   // Identificar mês "champion" (maior receita histórica)
-  const champion=[...porMes].sort((a,b)=>b.receita-a.receita)[0];
+  const champion=relMetricMes==='count'
+    ? [...porMes].sort((a,b)=>b.count-a.count)[0]
+    : [...porMes].sort((a,b)=>b.receita-a.receita)[0];
 
   // 4. Itens em estoque (não vendidos) com dias parados
   const hoje0=new Date(); hoje0.setHours(12,0,0,0);
@@ -2283,8 +2291,9 @@ function renderRelTempo(sold){
     const wd=new Date(s.dataVenda+'T12:00:00').getDay();
     porSemana[wd].count++; porSemana[wd].receita+=s.vendido; porSemana[wd].lucro+=s.lucro; porSemana[wd].items.push(s);
   });
-  const maxRecSemana=Math.max(...porSemana.map(m=>m.receita),1);
-  const championSemana=[...porSemana].sort((a,b)=>b.receita-a.receita)[0];
+  const championSemana=relMetricSemana==='count'
+    ? [...porSemana].sort((a,b)=>b.count-a.count)[0]
+    : [...porSemana].sort((a,b)=>b.receita-a.receita)[0];
 
   // 6. Melhores dias específicos de venda (datas exatas com maior receita)
   const fmtDataBr=iso=>new Date(iso+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'});
@@ -2314,6 +2323,41 @@ function renderRelTempo(sold){
       const gap=Math.round((new Date(datasVenda[i]+'T12:00:00')-new Date(datasVenda[i-1]+'T12:00:00'))/86400000);
       if(gap>maiorIntervalo) maiorIntervalo=gap;
     }
+  }
+
+  // Gráfico de barras verticais (quantidade ou valor) — Jan..Dez ou Dom..Sáb
+  function relBarChart(items, metric, cacheKeyPrefix){
+    const vals=items.map(m=>metric==='count'?m.count:m.receita);
+    const max=Math.max(...vals,1);
+    const maxIdx=vals.indexOf(Math.max(...vals));
+    const bars=items.map((m,i)=>{
+      if(m.items.length>0){
+        window.__relCache[`${cacheKeyPrefix}_${i}`]={
+          title: m.labelFull||m.label,
+          subtitle: `${m.count} venda${m.count!==1?'s':''} · ${fm(m.receita)} · lucro ${fm(m.lucro)}`,
+          items: [...m.items].sort((a,b)=>(b.dataVenda||'').localeCompare(a.dataVenda||'')),
+          renderItem: relRowItem,
+        };
+      }
+      const v=metric==='count'?m.count:m.receita;
+      const pct= v>0 ? Math.max((v/max)*100,4) : 0;
+      const isMax = i===maxIdx && v>0;
+      const clickable = m.items.length>0;
+      return `
+        <div class="vbar-col" ${clickable?`onclick="openRelList('${cacheKeyPrefix}_${i}')"`:''}>
+          ${isMax?`<div class="vbar-val">${metric==='count'?v:fm(v)}</div>`:''}
+          <div class="vbar-bar" style="height:${pct}%;background:${isMax?'var(--teal-600)':'var(--pink-400)'}"></div>
+          <div class="vbar-lbl ${isMax?'champ':''}">${m.label}</div>
+        </div>`;
+    }).join('');
+    return `<div class="vbar-wrap">${bars}</div>`;
+  }
+  // Chips pra trocar entre ver quantidade de vendas ou valor somado
+  function metricToggle(varName, current){
+    return `<div class="frow" style="margin-bottom:12px;gap:6px">
+      <button class="chip ${current==='count'?'active':''}" onclick="${varName}='count';render()">🔢 Quantidade</button>
+      <button class="chip ${current==='receita'?'active':''}" onclick="${varName}='receita';render()">💰 Valor</button>
+    </div>`;
   }
 
   // Linha clicável genérica pra um agrupamento de dia (data exata ou dia-do-mês)
@@ -2364,11 +2408,8 @@ function renderRelTempo(sold){
     )}
 
     ${relCard('🌞 Sazonalidade (todos os anos juntos)',
-      `Mês historicamente mais forte: <b>${champion.count>0?champion.labelFull:'—'}</b> · ${fm(champion.receita)}`,
-      porMes.map((m,i)=>tempoBarra(
-        m, maxRec, `temp_sazon_${i}`, m.labelFull+' (todos os anos)',
-        m.receita===maxRec&&m.receita>0?'var(--teal-600)':'var(--pink-600)'
-      )).join('')
+      `Mês historicamente mais forte: <b>${champion.count>0?champion.labelFull:'—'}</b> · ${relMetricMes==='count'?`${champion.count} vendas`:fm(champion.receita)}`,
+      metricToggle('relMetricMes', relMetricMes) + relBarChart(porMes, relMetricMes, 'temp_sazon')
     )}
 
     ${relCard('📅 Últimos 12 meses', 'Tap em uma barra pra ver as vendas daquele mês',
@@ -2379,11 +2420,8 @@ function renderRelTempo(sold){
     )}
 
     ${relCard('📆 Melhor dia da semana',
-      `Historicamente mais forte: <b>${championSemana.count>0?championSemana.labelFull:'—'}</b> · ${fm(championSemana.receita)}`,
-      porSemana.map((m,i)=>tempoBarra(
-        m, maxRecSemana, `temp_semana_${i}`, m.labelFull,
-        m.receita===maxRecSemana&&m.receita>0?'var(--teal-600)':'var(--pink-600)'
-      )).join('')
+      `Historicamente mais forte: <b>${championSemana.count>0?championSemana.labelFull:'—'}</b> · ${relMetricSemana==='count'?`${championSemana.count} vendas`:fm(championSemana.receita)}`,
+      metricToggle('relMetricSemana', relMetricSemana) + relBarChart(porSemana, relMetricSemana, 'temp_semana')
     )}
 
     ${relCard('🏆 Melhores dias de venda', 'As datas exatas com maior receita — tap pra ver o que vendeu',
