@@ -88,7 +88,10 @@ body.modal-open{position:fixed;left:0;right:0;width:100%;overflow:hidden;}
 .vbar-wrap{display:flex;align-items:flex-end;gap:3px;height:120px;margin-bottom:2px;}
 .vbar-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;cursor:pointer;border-radius:6px;transition:background .12s;padding-top:2px;}
 .vbar-col:active{background:var(--pink-50);}
-.vbar-val{font-size:9px;color:var(--text2);margin-bottom:3px;font-weight:600;white-space:nowrap;}
+.vbar-val{display:flex;flex-direction:column;align-items:center;gap:1px;margin-bottom:3px;line-height:1.1;}
+.vbar-val .n{font-size:9px;color:var(--text2);font-weight:600;}
+.vbar-val .v{font-size:8px;color:var(--text2);}
+.vbar-col.champ .vbar-val .n,.vbar-col.champ .vbar-val .v{color:var(--teal-600);font-weight:700;}
 .vbar-bar{width:100%;max-width:22px;border-radius:4px 4px 2px 2px;transition:height .25s;min-height:2px;}
 .vbar-lbl{font-size:9.5px;color:var(--text2);margin-top:5px;}
 .vbar-lbl.champ{color:var(--teal-600);font-weight:700;}
@@ -256,7 +259,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '33';
+const APP_VERSION = '34';
 const APP_VERSION_DATE = 'Oct 1, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -550,6 +553,15 @@ function cleanDate(v){
   return m?m[1]:'';
 }
 function fm(v){ return '$'+(parseFloat(v)||0).toFixed(2); }
+// Versão compacta pra caber em espaços estreitos (ex: barra de gráfico): $2024.80 -> $2k
+function fmCompact(v){
+  const n=parseFloat(v)||0, sign=n<0?'-':'', abs=Math.abs(n);
+  if(abs>=1000){
+    const k=abs/1000;
+    return sign+'$'+(k>=100?k.toFixed(0):k.toFixed(1).replace(/\.0$/,''))+'k';
+  }
+  return sign+'$'+Math.round(abs);
+}
 function getVV(sku){ const l=S.listagem.find(l=>l.sku===sku&&l.status==='Vendido'); return l?parseFloat(l.valorVendido)||0:0; }
 // Helpers de embalagem — suportam formato novo (array embalagens) e legado (embalagemId único)
 function lstEmbalagens(l){
@@ -2344,8 +2356,8 @@ function renderRelTempo(sold){
       const isMax = i===maxIdx && v>0;
       const clickable = m.items.length>0;
       return `
-        <div class="vbar-col" ${clickable?`onclick="openRelList('${cacheKeyPrefix}_${i}')"`:''}>
-          ${isMax?`<div class="vbar-val">${metric==='count'?v:fm(v)}</div>`:''}
+        <div class="vbar-col ${isMax?'champ':''}" ${clickable?`onclick="openRelList('${cacheKeyPrefix}_${i}')"`:''}>
+          ${m.count>0?`<div class="vbar-val"><div class="n">${m.count}</div><div class="v">${fmCompact(m.receita)}</div></div>`:''}
           <div class="vbar-bar" style="height:${pct}%;background:${isMax?'var(--teal-600)':'var(--pink-400)'}"></div>
           <div class="vbar-lbl ${isMax?'champ':''}">${m.label}</div>
         </div>`;
