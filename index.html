@@ -249,8 +249,8 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '31';
-const APP_VERSION_DATE = 'Sep 25, 2026';
+const APP_VERSION = '32';
+const APP_VERSION_DATE = 'Oct 1, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
@@ -2274,6 +2274,72 @@ function renderRelTempo(sold){
       </div>`;
   }
 
+  // 5. Melhor dia da semana (Dom-Sáb, somando todas as vendas históricas)
+  const weekdayNames=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const weekdayFull=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+  const porSemana=Array(7).fill(null).map((_,i)=>({label:weekdayNames[i], labelFull:weekdayFull[i], count:0, receita:0, lucro:0, items:[]}));
+  sold.forEach(s=>{
+    if(!s.dataVenda) return;
+    const wd=new Date(s.dataVenda+'T12:00:00').getDay();
+    porSemana[wd].count++; porSemana[wd].receita+=s.vendido; porSemana[wd].lucro+=s.lucro; porSemana[wd].items.push(s);
+  });
+  const maxRecSemana=Math.max(...porSemana.map(m=>m.receita),1);
+  const championSemana=[...porSemana].sort((a,b)=>b.receita-a.receita)[0];
+
+  // 6. Melhores dias específicos de venda (datas exatas com maior receita)
+  const fmtDataBr=iso=>new Date(iso+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'});
+  const porDia={};
+  sold.forEach(s=>{
+    if(!s.dataVenda) return;
+    if(!porDia[s.dataVenda]) porDia[s.dataVenda]={label:fmtDataBr(s.dataVenda), count:0, receita:0, lucro:0, items:[]};
+    porDia[s.dataVenda].count++; porDia[s.dataVenda].receita+=s.vendido; porDia[s.dataVenda].lucro+=s.lucro; porDia[s.dataVenda].items.push(s);
+  });
+  const topDias=Object.values(porDia).sort((a,b)=>b.receita-a.receita).slice(0,10);
+
+  // 7. Melhores dias do mês (1-31, agrupando o mesmo dia em meses/anos diferentes)
+  const porDiaMes=Array(31).fill(null).map((_,i)=>({label:'Dia '+(i+1), count:0, receita:0, lucro:0, items:[]}));
+  sold.forEach(s=>{
+    if(!s.dataVenda) return;
+    const d=parseInt(s.dataVenda.slice(8,10))-1;
+    if(d>=0&&d<31){ porDiaMes[d].count++; porDiaMes[d].receita+=s.vendido; porDiaMes[d].lucro+=s.lucro; porDiaMes[d].items.push(s); }
+  });
+  const topDiasMes=porDiaMes.filter(d=>d.count>0).sort((a,b)=>b.receita-a.receita).slice(0,10);
+
+  // 8. Ritmo de vendas: dias desde a última venda + maior intervalo já visto sem vender
+  const datasVenda=[...new Set(sold.filter(s=>s.dataVenda).map(s=>s.dataVenda))].sort();
+  let diasDesdeUltima=null, maiorIntervalo=0;
+  if(datasVenda.length){
+    diasDesdeUltima=Math.round((hoje0-new Date(datasVenda[datasVenda.length-1]+'T12:00:00'))/86400000);
+    for(let i=1;i<datasVenda.length;i++){
+      const gap=Math.round((new Date(datasVenda[i]+'T12:00:00')-new Date(datasVenda[i-1]+'T12:00:00'))/86400000);
+      if(gap>maiorIntervalo) maiorIntervalo=gap;
+    }
+  }
+
+  // Linha clicável genérica pra um agrupamento de dia (data exata ou dia-do-mês)
+  function relRowPeriodo(it, idx, cachePrefix){
+    if(it.items.length>0){
+      window.__relCache[`${cachePrefix}_${idx}`]={
+        title: it.label,
+        subtitle: `${it.count} venda${it.count!==1?'s':''} · ${fm(it.receita)} · lucro ${fm(it.lucro)}`,
+        items: [...it.items].sort((a,b)=>(b.dataVenda||'').localeCompare(a.dataVenda||'')),
+        renderItem: relRowItem,
+      };
+    }
+    return `
+      <div class="t5row rel-row" onclick="cm();openRelList('${cachePrefix}_${idx}')" style="cursor:pointer">
+        <div class="t5n">${idx+1}</div>
+        <div style="flex:1;min-width:0">
+          <div class="iname" style="font-size:13px">${it.label}</div>
+          <div class="isub">${it.count} ${it.count===1?'venda':'vendas'}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:13px;font-weight:600;color:var(--teal-600)">${fm(it.receita)}</div>
+          <div class="isub" style="font-size:11px">lucro ${fm(it.lucro)}</div>
+        </div>
+      </div>`;
+  }
+
   return `
     ${relCard('📦 Top 5 mais tempo em estoque',
       emEstoque.length>0?`Itens não vendidos parados há mais tempo · candidatos a promoção`:'',
@@ -2311,6 +2377,33 @@ function renderRelTempo(sold){
         'var(--pink-600)'
       )).join('')
     )}
+
+    ${relCard('📆 Melhor dia da semana',
+      `Historicamente mais forte: <b>${championSemana.count>0?championSemana.labelFull:'—'}</b> · ${fm(championSemana.receita)}`,
+      porSemana.map((m,i)=>tempoBarra(
+        m, maxRecSemana, `temp_semana_${i}`, m.labelFull,
+        m.receita===maxRecSemana&&m.receita>0?'var(--teal-600)':'var(--pink-600)'
+      )).join('')
+    )}
+
+    ${relCard('🏆 Melhores dias de venda', 'As datas exatas com maior receita — tap pra ver o que vendeu',
+      topDias.length>0
+        ? topDias.map((it,idx)=>relRowPeriodo(it,idx,'temp_dia')).join('')
+        : '<div class="empty" style="padding:8px 0">Sem dados</div>'
+    )}
+
+    ${relCard('🗓️ Melhores dias do mês', 'Somando o mesmo número de dia em todos os meses/anos — ajuda a ver se vende mais perto de pagamento, início do mês etc.',
+      topDiasMes.length>0
+        ? topDiasMes.map((it,idx)=>relRowPeriodo(it,idx,'temp_diames')).join('')
+        : '<div class="empty" style="padding:8px 0">Sem dados</div>'
+    )}
+
+    ${datasVenda.length>0?relCard('📬 Ritmo de vendas', 'Pra saber se o ritmo caiu',
+      `<div class="mgrid">
+        <div class="metric"><div class="mlbl">Dias desde a última venda</div><div class="mval" style="color:${diasDesdeUltima>maiorIntervalo?'var(--coral-400)':'var(--text)'}">${diasDesdeUltima}</div></div>
+        <div class="metric"><div class="mlbl">Maior pausa já vista</div><div class="mval">${maiorIntervalo} ${maiorIntervalo===1?'dia':'dias'}</div></div>
+      </div>`
+    ):''}
 
     ${comDias.length>0?relCard('⏱️ Velocidade de giro do estoque',
       'Tempo entre comprar e vender',
