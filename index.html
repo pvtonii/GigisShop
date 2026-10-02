@@ -82,6 +82,10 @@ body.modal-open{position:fixed;left:0;right:0;width:100%;overflow:hidden;}
 .rel-row{cursor:pointer;transition:background .12s;}
 .rel-row:hover{background:var(--pink-50);}
 .rel-row:active{background:var(--pink-100);}
+/* .t5row já tem padding:10px 0 (sem respiro lateral) — sem isso o destaque de toque
+   ficava um retângulo fino que não chegava nas bordas do card (combo precisa vencer
+   .t5row na especificidade, não importa a ordem no arquivo) */
+.t5row.rel-row{margin:0 -14px;padding:10px 14px;border-radius:8px;}
 .rel-bar-row{cursor:pointer;padding:8px 4px;margin:0 -4px;border-radius:6px;transition:background .12s;}
 .rel-bar-row:hover{background:var(--pink-50);}
 .rel-bar-row:active{background:var(--pink-100);}
@@ -263,8 +267,8 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '35';
-const APP_VERSION_DATE = 'Oct 1, 2026';
+const APP_VERSION = '36';
+const APP_VERSION_DATE = 'Oct 2, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
