@@ -136,8 +136,12 @@ label{font-size:12px;color:var(--text2);display:block;margin-bottom:3px;}
 .mval{font-size:20px;font-weight:500;color:var(--text);}
 .msub{font-size:11px;color:var(--text2);margin-top:2px;}
 .sbar{position:relative;margin-bottom:14px;}
-.sbar input{padding-left:32px;margin-bottom:0;}
+.sbar input{padding-left:32px;padding-right:30px;margin-bottom:0;}
 .sbar svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--gray-400);pointer-events:none;}
+.ifield{position:relative;}
+.ifield input{padding-right:30px;}
+.iclear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:20px;height:20px;border:none;background:var(--gray-100);color:var(--text2);border-radius:50%;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
+.iclear:active{background:var(--gray-400);color:#fff;}
 .frow{display:flex;gap:8px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px;}
 .chip{padding:5px 12px;border-radius:20px;border:0.5px solid rgba(0,0,0,0.18);background:transparent;font-size:12px;cursor:pointer;white-space:nowrap;font-family:inherit;color:var(--text);transition:all .12s;}
 .chip.active{background:var(--pink-400);color:#fff;border-color:var(--pink-400);}
@@ -259,7 +263,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '34';
+const APP_VERSION = '35';
 const APP_VERSION_DATE = 'Oct 1, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -491,6 +495,17 @@ function esc(s){
 }
 // Busca por palavras soltas: "lauren shorts" bate com "Ralph Lauren Denim Shorts"
 // mesmo fora de ordem/adjacência — cada palavra só precisa aparecer em algum lugar
+// Botão "×" de limpar campo: zera o valor e dispara o evento input de verdade,
+// então qualquer oninput já ligado no campo (busca ao vivo, autocomplete) reage sozinho
+function clearField(id, alsoId){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.value='';
+  if(alsoId){ const el2=document.getElementById(alsoId); if(el2) el2.value=''; }
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+  el.focus();
+}
+function iclear(id, alsoId){ return `<button type="button" class="iclear" tabindex="-1" onclick="clearField('${id}'${alsoId?`,'${alsoId}'`:''})" title="Limpar">×</button>`; }
 function matchWords(haystack, query){
   const words=(query||'').toLowerCase().trim().split(/\s+/).filter(Boolean);
   if(!words.length) return true;
@@ -708,9 +723,9 @@ function renderSetup(){
       <li>Copie a <b>Project URL</b> e a chave <b>anon public</b></li>
     </ol>
     <label>Project URL</label>
-    <input type="url" id="sbUrlIn" placeholder="https://xxxxxxxxxxx.supabase.co" style="margin-bottom:10px"/>
+    <div class="ifield" style="margin-bottom:10px"><input type="url" id="sbUrlIn" placeholder="https://xxxxxxxxxxx.supabase.co" style="margin-bottom:0"/>${iclear('sbUrlIn')}</div>
     <label>Anon Key</label>
-    <input type="text" id="sbKeyIn" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." />
+    <div class="ifield"><input type="text" id="sbKeyIn" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." />${iclear('sbKeyIn')}</div>
     <button class="btn btn-primary" style="width:100%" onclick="saveSupabaseConfig()">Salvar e conectar</button>
   </div>`;
 }
@@ -1212,7 +1227,7 @@ function renderInv(){
   return `
     <div class="sbar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="invSearch" placeholder="Buscar por nome, localização, local..." value="${esc(invQ)}" oninput="invQ=this.value;render();const el=document.getElementById('invSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>
+      <input id="invSearch" placeholder="Buscar por nome, localização, local..." value="${esc(invQ)}" oninput="invQ=this.value;render();const el=document.getElementById('invSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>${invQ?iclear('invSearch'):''}
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
       <div class="frow" style="margin:0;flex:1;min-width:0;gap:6px">
@@ -1303,7 +1318,7 @@ async function addTrackingPrompt(listingId){
       <div class="modal">
         <div class="mhdr"><h2>📦 Código de rastreio</h2><button class="xbtn" onclick="cm()">×</button></div>
         <label>Código (USPS, UPS, FedEx, DHL)</label>
-        <input type="text" id="trk_inp" value="${esc(l.trackingCode)}" placeholder="Ex: 9400111899223456789012" autofocus/>
+        <div class="ifield"><input type="text" id="trk_inp" value="${esc(l.trackingCode)}" placeholder="Ex: 9400111899223456789012" autofocus/>${iclear('trk_inp')}</div>
         <div style="font-size:11px;color:var(--text2);margin-top:6px;margin-bottom:14px">A transportadora será detectada automaticamente.</div>
         <button class="btn btn-primary" style="width:100%" onclick="saveTrackingCode('${listingId}')">Salvar</button>
       </div>
@@ -1345,7 +1360,7 @@ function renderLst(){
   return `
     <div class="sbar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="lstSearch" placeholder="Buscar por localização, plataforma, item..." value="${esc(lstQ)}" oninput="lstQ=this.value;render();const el=document.getElementById('lstSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>
+      <input id="lstSearch" placeholder="Buscar por localização, plataforma, item..." value="${esc(lstQ)}" oninput="lstQ=this.value;render();const el=document.getElementById('lstSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>${lstQ?iclear('lstSearch'):''}
     </div>
     <div class="frow">${plats.map(p=>`<button class="chip ${lstF===p?'active':''}" onclick="lstF='${p}';render()">${p}</button>`).join('')}</div>
     ${items.length===0?'<div class="empty">Nenhum anúncio cadastrado</div>':`
@@ -1420,7 +1435,7 @@ function renderGastosFixos(){
     </div>
     <div class="sbar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="gastosFSearch" placeholder="Buscar por descrição..." value="${esc(gastosFQ)}" oninput="gastosFQ=this.value;render();const el=document.getElementById('gastosFSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>
+      <input id="gastosFSearch" placeholder="Buscar por descrição..." value="${esc(gastosFQ)}" oninput="gastosFQ=this.value;render();const el=document.getElementById('gastosFSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>${gastosFQ?iclear('gastosFSearch'):''}
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
       <select onchange="gastosFSort=this.value;render()" style="width:auto;margin:0;padding:5px 10px;font-size:12px;flex:1">
@@ -1430,7 +1445,6 @@ function renderGastosFixos(){
         <option value="menor" ${gastosFSort==='menor'?'selected':''}>💰 Menor valor</option>
         <option value="az" ${gastosFSort==='az'?'selected':''}>🔤 A → Z</option>
       </select>
-      ${gastosFQ?`<button class="btn btn-sm" onclick="gastosFQ='';render()" style="padding:5px 10px">✕ Limpar</button>`:''}
     </div>
     ${gastos.length===0?`<div class="empty">${filtrando?'Nenhum custo encontrado com esse filtro':'Nenhum custo fixo registrado'}</div>`:`
     <div class="card" style="padding:0 14px">
@@ -1528,7 +1542,7 @@ function openInsumoModal(item){
           <div style="font-size:11px;color:var(--text2);line-height:1.4">💡 Aqui você só edita <b>nome</b> e <b>qtd mínima</b>. Pra adicionar mais estoque, use o botão <b>"+ Comprar mais"</b> na lista de insumos — ele faz a média ponderada do valor unitário automaticamente.</div>
         </div>`:''}
         <label>Nome do insumo</label>
-        <input id="i_nome" value="${e?esc(e.nome):''}" placeholder="Ex: Saquinho transparente, Caixa grande..."/>
+        <div class="ifield"><input id="i_nome" value="${e?esc(e.nome):''}" placeholder="Ex: Saquinho transparente, Caixa grande..."/>${iclear('i_nome')}</div>
         <div class="form-row">
           <div>
             <label>${camposTravados?'Qtd em estoque':'Qtd comprada'}</label>
@@ -1738,7 +1752,7 @@ function openGastoModal(item){
       <div class="modal">
         <div class="mhdr"><h2>${e?'Editar custo fixo':'Novo custo fixo'}</h2><button class="xbtn" onclick="cm()">×</button></div>
         <label>Item / Descrição</label>
-        <input id="g_item" value="${e?esc(e.item):''}" placeholder="Ex: Etiquetadora, estante..."/>
+        <div class="ifield"><input id="g_item" value="${e?esc(e.item):''}" placeholder="Ex: Etiquetadora, estante..."/>${iclear('g_item')}</div>
         <div class="form-row">
           <div><label>Valor ($)</label><input type="number" id="g_valor" value="${e?e.valor||'':''}" placeholder="0.00" step="0.01"/></div>
           <div><label>Data</label><input type="date" id="g_data" value="${e?e.data||'':''}"/></div>
@@ -1975,7 +1989,10 @@ function renderRelPerformance(sold){
   const porMargem=[...sold].filter(s=>s.pago>0).sort((a,b)=>b.margem-a.margem);
   const comDias=sold.filter(s=>s.dias!=null);
   const maisDemorou=[...comDias].sort((a,b)=>b.dias-a.dias);
-  const maisRapido=[...comDias].sort((a,b)=>a.dias-b.dias);
+  // "Mais rápido" olha só os últimos 3 meses — senão o mesmo recorde antigo nunca sai do topo
+  const tresMesesAtras=new Date(); tresMesesAtras.setMonth(tresMesesAtras.getMonth()-3);
+  const comDiasRecentes=comDias.filter(s=>s.dataVenda && new Date(s.dataVenda+'T12:00:00')>=tresMesesAtras);
+  const maisRapido=[...comDiasRecentes].sort((a,b)=>a.dias-b.dias);
   // Mais vendidos por NOME
   const porNome={};
   sold.forEach(s=>{
@@ -1998,7 +2015,7 @@ function renderRelPerformance(sold){
       porMargem, relRowMargem, `Ver todos os ${porMargem.length}`
     )}
 
-    ${maisRapido.length>0?relSummaryCard('perf_rapido', '⚡ Venderam mais rápido', 'Menos tempo entre compra e venda',
+    ${maisRapido.length>0?relSummaryCard('perf_rapido', '⚡ Venderam mais rápido', 'Menos tempo entre compra e venda · últimos 3 meses',
       maisRapido, (it,idx)=>relRowDias(it,idx,true), `Ver todos os ${maisRapido.length}`
     ):''}
 
@@ -2397,18 +2414,11 @@ function renderRelTempo(sold){
   }
 
   return `
-    ${relCard('📦 Top 5 mais tempo em estoque',
-      emEstoque.length>0?`Itens não vendidos parados há mais tempo · candidatos a promoção`:'',
-      top5Encalhados.length>0
-        ? top5Encalhados.map((i,idx)=>rowEstoque(i,idx)).join('')
-        : '<div class="empty" style="padding:8px 0">Nenhum item em estoque</div>'
-    )}
-
     ${relCard('🔍 Buscar item no estoque',
       'Pesquise por nome, localização, categoria ou local pra ver há quanto tempo está parado',
       `<div class="sbar" style="margin-bottom:${buscaResultados.length>0||qBusca?'10px':'0'}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <input id="estoqueSearch" placeholder="Buscar por nome, localização..." value="${esc(estoqueQ)}" oninput="estoqueQ=this.value;render();const el=document.getElementById('estoqueSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>
+        <input id="estoqueSearch" placeholder="Buscar por nome, localização..." value="${esc(estoqueQ)}" oninput="estoqueQ=this.value;render();const el=document.getElementById('estoqueSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}"/>${estoqueQ?iclear('estoqueSearch'):''}
       </div>
       ${qBusca
         ? (buscaResultados.length>0
@@ -2417,6 +2427,13 @@ function renderRelTempo(sold){
           )
         : ''
       }`
+    )}
+
+    ${relCard('📦 Top 5 mais tempo em estoque',
+      emEstoque.length>0?`Itens não vendidos parados há mais tempo · candidatos a promoção`:'',
+      top5Encalhados.length>0
+        ? top5Encalhados.map((i,idx)=>rowEstoque(i,idx)).join('')
+        : '<div class="empty" style="padding:8px 0">Nenhum item em estoque</div>'
     )}
 
     ${relCard('🌞 Sazonalidade (todos os anos juntos)',
@@ -2486,9 +2503,9 @@ function renderCfg(){
     <div class="card">
       <p class="stitle">Conexão Supabase</p>
       <label>Project URL</label>
-      <input id="sbUrlEdit" value="${SB_URL}" placeholder="https://xxx.supabase.co"/>
+      <div class="ifield"><input id="sbUrlEdit" value="${SB_URL}" placeholder="https://xxx.supabase.co"/>${iclear('sbUrlEdit')}</div>
       <label>Anon Key</label>
-      <input id="sbKeyEdit" value="${SB_KEY}" placeholder="eyJ..."/>
+      <div class="ifield"><input id="sbKeyEdit" value="${SB_KEY}" placeholder="eyJ..."/>${iclear('sbKeyEdit')}</div>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button class="btn btn-primary btn-sm" onclick="updSupabase()">Atualizar</button>
         <button class="btn btn-sm" onclick="syncFromSupabase()">↻ Sincronizar agora</button>
@@ -2563,7 +2580,7 @@ function openInvModal(item){
       <div class="modal">
         <div class="mhdr"><h2>${e?'Editar item':'Novo item'}</h2><button class="xbtn" onclick="cm()">×</button></div>
         <label>Nome do item</label>
-        <input id="f_nome" value="${e?esc(e.nome):''}" placeholder="Ex: Blusa jeans"/>
+        <div class="ifield"><input id="f_nome" value="${e?esc(e.nome):''}" placeholder="Ex: Blusa jeans"/>${iclear('f_nome')}</div>
         <div class="form-row">
           <div><label>SKU</label><input id="f_sku" value="${e?e.sku:genSKU()}" readonly style="background:var(--bg2);color:var(--text2);cursor:not-allowed;"/></div>
           <div><label>Data da compra</label><input type="date" id="f_data" value="${e?e.dataCompra||'':''}"/></div>
@@ -2581,7 +2598,7 @@ function openInvModal(item){
           <div><label>Status do item</label><select id="f_si">${c.statusItem.map(x=>`<option ${e&&e.statusItem===x?'selected':''}>${x}</option>`).join('')}</select></div>
         </div>
         <label>Localização <span style="color:var(--text2);font-weight:400">(onde está guardado fisicamente)</span></label>
-        <input id="f_localizacao" value="${e?esc(e.localizacao):''}" placeholder="Ex: Caixa 1, Prateleira A, Sacola azul..."/>
+        <div class="ifield"><input id="f_localizacao" value="${e?esc(e.localizacao):''}" placeholder="Ex: Caixa 1, Prateleira A, Sacola azul..."/>${iclear('f_localizacao')}</div>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 12px;background:var(--bg2);border-radius:8px;margin-top:8px;border:1px solid var(--border)">
           <input type="checkbox" id="f_retornavel" ${e&&e.retornavel?'checked':''} style="width:18px;height:18px;cursor:pointer;accent-color:var(--coral-400)"/>
           <span style="font-weight:500">🔄 Item retornável</span>
@@ -2660,7 +2677,7 @@ function openLstModal(item){
         <label>Item</label>
         <input type="hidden" id="l_sku_val" value="${esc(editSku)}"/>
         <div class="ac-wrap">
-          <input id="l_sku_inp" placeholder="Buscar por nome ou SKU..." value="${editNome?esc(editNome+' ('+editSku+')'):''}"/>
+          <input id="l_sku_inp" placeholder="Buscar por nome ou SKU..." value="${editNome?esc(editNome+' ('+editSku+')'):''}"/>${iclear('l_sku_inp','l_sku_val')}
           <div class="ac-drop" id="l_sku_drop"></div>
         </div>
         <div class="form-row">
@@ -2685,7 +2702,7 @@ function openLstModal(item){
           <button type="button" class="btn btn-sm" style="width:100%;margin-bottom:10px" onclick="addEmbRow()">+ Adicionar embalagem</button>
           <div id="l_emb_total" style="font-size:12px;color:var(--text2);margin-top:-4px;margin-bottom:10px"></div>
           <label>📦 Código de rastreio</label>
-          <input type="text" id="l_track" value="${e?esc(e.trackingCode):''}" placeholder="Ex: 9400111899223456789012" style="margin-bottom:10px"/>
+          <div class="ifield" style="margin-bottom:10px"><input type="text" id="l_track" value="${e?esc(e.trackingCode):''}" placeholder="Ex: 9400111899223456789012" style="margin-bottom:0"/>${iclear('l_track')}</div>
           <div style="font-size:11px;color:var(--text2);margin-top:-6px;margin-bottom:10px">USPS, UPS, FedEx ou DHL — detecta automaticamente</div>
         </div>
         <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="saveLst('${e?e.id:''}')">Salvar</button>
