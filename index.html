@@ -267,8 +267,8 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '36';
-const APP_VERSION_DATE = 'Oct 2, 2026';
+const APP_VERSION = '37';
+const APP_VERSION_DATE = 'Oct 27, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
 let SB_KEY = localStorage.getItem('gigi_sb_key') || '';
@@ -1228,6 +1228,8 @@ function renderInv(){
   else if(invSort==='menor') items=[...items].sort((a,b)=>(parseFloat(a.valorPago)||0)-(parseFloat(b.valorPago)||0));
   else if(invSort==='lucro') items=[...items].sort((a,b)=>(getVV(b.sku)-(parseFloat(b.valorPago)||0)-getEmb(b.sku))-(getVV(a.sku)-(parseFloat(a.valorPago)||0)-getEmb(a.sku)));
   else items=[...items].reverse(); // recente = último inserido primeiro
+  // Buscando, item vendido (riscado) fica pra depois — raramente é o que você quer achar
+  if(invQ) items=[...items].sort((a,b)=>(getSV(a.sku)==='Vendido'?1:0)-(getSV(b.sku)==='Vendido'?1:0));
   return `
     <div class="sbar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -1361,6 +1363,8 @@ function renderLst(){
     return matchWords([inv&&inv.localizacao, l.plataforma, inv&&inv.nome].join(' '), lstQ);
   });
   if(lstF!=='Todos') items=items.filter(l=>l.plataforma===lstF);
+  // Buscando, anúncio vendido (riscado) fica pra depois — raramente é o que você quer achar
+  if(lstQ) items=[...items].sort((a,b)=>(a.status==='Vendido'?1:0)-(b.status==='Vendido'?1:0));
   return `
     <div class="sbar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -2540,7 +2544,9 @@ function buildAC(inputId, dropId, hiddenId){
   if(!inp||!drop) return;
   inp.addEventListener('input',()=>{
     const q=inp.value.toLowerCase();
-    const matches=S.inventario.filter(i=>matchWords([i.nome,i.sku].join(' '), q)).slice(0,50);
+    const matches=S.inventario.filter(i=>matchWords([i.nome,i.sku].join(' '), q))
+      .sort((a,b)=>(getSV(a.sku)==='Vendido'?1:0)-(getSV(b.sku)==='Vendido'?1:0))
+      .slice(0,50);
     if(!q||matches.length===0){ drop.className='ac-drop'; return; }
     drop.innerHTML=matches.map((i,idx)=>
       `<div class="ac-item" data-idx="${idx}" data-sku="${esc(i.sku)}" data-nome="${esc(i.nome)}" onclick="selectAC('${inputId}','${dropId}','${hiddenId}',this.dataset.sku,this.dataset.nome)">
