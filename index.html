@@ -265,7 +265,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '38';
+const APP_VERSION = '39';
 const APP_VERSION_DATE = 'Nov 1, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -655,7 +655,7 @@ function openMaisDrawer(){
   if(document.getElementById('maisDrawer')){ closeMaisDrawer(); return; }
   const item=(t,label,svg)=>`<div class="drawer-item" onclick="closeMaisDrawer();go('${t}')">${svg}<div class="di-label">${label}</div></div>`;
   const html=`
-    <div class="drawer-bg" onclick="closeMaisDrawer()"></div>
+    <div class="drawer-bg" onclick="closeMaisDrawer()" ontouchmove="event.preventDefault()"></div>
     <div class="drawer">
       ${item('gastos','Gastos','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>')}
       <div class="drawer-sep"></div>
@@ -2998,11 +2998,12 @@ function setModalOpen(open){
   }
 }
 function refreshModalLock(){
-  const open=document.getElementById('mc').innerHTML.trim()!==''||!!document.getElementById('maisDrawer');
+  // O menu "Mais" fica de fora: travar o body no iOS deixava uma faixa cinza embaixo da tab bar,
+  // que o popover não cobre. O fundo dele já bloqueia rolagem via touchmove.
+  const open=document.getElementById('mc').innerHTML.trim()!=='';
   setModalOpen(open);
 }
 new MutationObserver(refreshModalLock).observe(document.getElementById('mc'),{childList:true});
-new MutationObserver(refreshModalLock).observe(document.body,{childList:true});
 
 // ── INIT ──────────────────────────────────────────────────
 render();
