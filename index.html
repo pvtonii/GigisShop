@@ -79,7 +79,10 @@ body.modal-open{position:fixed;left:0;right:0;width:100%;overflow:hidden;}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
 .cal-dow{font-size:11px;color:var(--text2);text-align:center;padding:4px 0;font-weight:500;}
 .cal-day{min-height:62px;border-radius:8px;padding:5px 2px;text-align:center;background:var(--bg2);min-width:0;}
-.cal-day.has{background:var(--pink-50);}
+.cal-day.has{background:var(--pink-50);cursor:pointer;}
+.cal-day.has:active{background:var(--pink-100);}
+.cal-day.none{background:var(--coral-50);}
+.cal-day.none .cal-num{color:var(--coral-400);}
 .cal-day.today{box-shadow:inset 0 0 0 1.5px var(--pink-400);}
 .cal-num{font-size:13px;font-weight:500;color:var(--text);}
 .cal-qtd{font-size:9.5px;color:var(--text2);margin-top:3px;white-space:nowrap;}
@@ -279,7 +282,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '40';
+const APP_VERSION = '41';
 const APP_VERSION_DATE = 'Nov 1, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -1812,23 +1815,34 @@ function renderCal(){
   const [y,m]=calMes.split('-').map(Number);
   const porDia={};
   let totCount=0, totValor=0;
-  S.listagem.forEach(l=>{
-    if(l.status!=='Vendido'||!l.dataVenda||l.dataVenda.slice(0,7)!==calMes) return;
-    const d=parseInt(l.dataVenda.slice(8,10));
-    if(!porDia[d]) porDia[d]={count:0, valor:0};
-    const v=parseFloat(l.valorVendido)||0;
-    porDia[d].count++; porDia[d].valor+=v;
-    totCount++; totValor+=v;
+  relBuildSold().forEach(it=>{
+    if(!it.dataVenda||it.dataVenda.slice(0,7)!==calMes) return;
+    const d=parseInt(it.dataVenda.slice(8,10));
+    if(!porDia[d]) porDia[d]={count:0, valor:0, lucro:0, items:[]};
+    porDia[d].count++; porDia[d].valor+=it.vendido; porDia[d].lucro+=it.lucro; porDia[d].items.push(it);
+    totCount++; totValor+=it.vendido;
   });
   const titulo=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   const primeiroDow=new Date(y,m-1,1).getDay();
   const nDias=new Date(y,m,0).getDate();
   const hoje=new Date(), hojeD=(hoje.getFullYear()===y&&hoje.getMonth()===m-1)?hoje.getDate():0;
+  // dias que já passaram sem venda ficam vermelhinhos (hoje e futuro não)
+  const hojeMes=hoje.getFullYear()*12+hoje.getMonth(), esteMes=y*12+(m-1);
+  const passou=d=>esteMes<hojeMes||(esteMes===hojeMes&&d<hoje.getDate());
   let cells='';
   for(let i=0;i<primeiroDow;i++) cells+='<div></div>';
   for(let d=1;d<=nDias;d++){
     const x=porDia[d];
-    cells+=`<div class="cal-day${x?' has':''}${d===hojeD?' today':''}">
+    if(x){
+      const iso=calMes+'-'+String(d).padStart(2,'0');
+      window.__relCache['cal_'+d]={
+        title: new Date(iso+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}),
+        subtitle: `${fm(x.valor)} · lucro ${fm(x.lucro)}`,
+        items: [...x.items].sort((a,b)=>b.vendido-a.vendido),
+        renderItem: relRowItem,
+      };
+    }
+    cells+=`<div class="cal-day${x?' has':(passou(d)?' none':'')}${d===hojeD?' today':''}"${x?` onclick="openRelList('cal_${d}')"`:''}>
       <div class="cal-num">${d}</div>
       ${x?`<div class="cal-qtd">${x.count} ${x.count===1?'venda':'vendas'}</div><div class="cal-val">${fmCompact(x.valor)}</div>`:''}
     </div>`;
