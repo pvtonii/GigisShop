@@ -70,6 +70,20 @@ body.modal-open{position:fixed;left:0;right:0;width:100%;overflow:hidden;}
 .drawer-item svg{width:20px;height:20px;color:var(--pink-600);flex-shrink:0;}
 .drawer-item .di-label{font-size:15px;font-weight:500;color:var(--text);}
 .drawer-sep{height:0.5px;background:var(--border);margin:2px 10px;}
+/* ── Calendário ─────────────────────────────── */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.cal-arrow{width:38px;height:38px;border-radius:50%;border:0.5px solid var(--border);background:var(--bg);color:var(--pink-600);font-size:22px;line-height:1;cursor:pointer;font-family:inherit;}
+.cal-arrow:active{background:var(--pink-50);}
+.cal-title{font-size:16px;font-weight:500;color:var(--text);text-transform:capitalize;}
+.cal-sub{font-size:12px;color:var(--text2);margin-top:2px;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-dow{font-size:11px;color:var(--text2);text-align:center;padding:4px 0;font-weight:500;}
+.cal-day{min-height:62px;border-radius:8px;padding:5px 2px;text-align:center;background:var(--bg2);min-width:0;}
+.cal-day.has{background:var(--pink-50);}
+.cal-day.today{box-shadow:inset 0 0 0 1.5px var(--pink-400);}
+.cal-num{font-size:13px;font-weight:500;color:var(--text);}
+.cal-qtd{font-size:9.5px;color:var(--text2);margin-top:3px;white-space:nowrap;}
+.cal-val{font-size:11px;font-weight:500;color:var(--teal-600);margin-top:1px;white-space:nowrap;}
 @keyframes pop-in{from{opacity:0;transform:scale(.92) translateY(6px);}to{opacity:1;transform:none;}}
 @keyframes fade-in{from{opacity:0;}to{opacity:1;}}
 
@@ -265,7 +279,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '39';
+const APP_VERSION = '40';
 const APP_VERSION_DATE = 'Nov 1, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -283,7 +297,7 @@ let S = {
     statusItem:['Em Estoque','Listado'],
   }
 };
-let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos', invSexo='Todos', gastosFQ='', gastosFSort='recente', relTab='performance', estoqueQ='', relMetricMes='count', relMetricSemana='count';
+let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos', invSexo='Todos', gastosFQ='', gastosFSort='recente', relTab='performance', estoqueQ='', relMetricMes='count', relMetricSemana='count', calMes=(d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))(new Date());
 try{ const s=localStorage.getItem(LS); if(s) S=JSON.parse(s); }catch(e){}
 function saveL(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
 
@@ -643,7 +657,7 @@ function go(t){
   tab=t;
   // "Mais" tab: ativa quando estamos em gastos, relatorios ou config (filhos do drawer)
   document.querySelectorAll('.tab').forEach(el=>{
-    const inMais=['gastos','relatorios','config'].includes(t);
+    const inMais=['gastos','relatorios','calendario','config'].includes(t);
     if(el.dataset.tab==='mais') el.classList.toggle('active', inMais);
     else el.classList.toggle('active', el.dataset.tab===t);
   });
@@ -660,6 +674,8 @@ function openMaisDrawer(){
       ${item('gastos','Gastos','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>')}
       <div class="drawer-sep"></div>
       ${item('relatorios','Relatórios','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>')}
+      <div class="drawer-sep"></div>
+      ${item('calendario','Calendário','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>')}
       <div class="drawer-sep"></div>
       ${item('config','Configurações','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M16.24 7.76a6 6 0 0 1 0 8.49M4.93 4.93a10 10 0 0 0 0 14.14M7.76 7.76a6 6 0 0 0 0 8.49"/></svg>')}
     </div>`;
@@ -690,6 +706,7 @@ function render(){
   else if(tab==='listagem') c.innerHTML=renderLst();
   else if(tab==='gastos') c.innerHTML=renderGastos();
   else if(tab==='relatorios') c.innerHTML=renderRel();
+  else if(tab==='calendario') c.innerHTML=renderCal();
   else if(tab==='envios') c.innerHTML=renderEnvios();
   else c.innerHTML=renderCfg();
 }
@@ -1781,6 +1798,54 @@ async function delGasto(id){
   saveL(); render();
   await pushDeleteGasto(id);
   toast(`"${nome}" removido`,'warn');
+}
+
+// ── CALENDÁRIO ────────────────────────────────────────────
+// Mês a mês: qtd de vendas + valor vendido embaixo de cada dia
+function calNav(delta){
+  const [y,m]=calMes.split('-').map(Number);
+  const d=new Date(y,m-1+delta,1);
+  calMes=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  render();
+}
+function renderCal(){
+  const [y,m]=calMes.split('-').map(Number);
+  const porDia={};
+  let totCount=0, totValor=0;
+  S.listagem.forEach(l=>{
+    if(l.status!=='Vendido'||!l.dataVenda||l.dataVenda.slice(0,7)!==calMes) return;
+    const d=parseInt(l.dataVenda.slice(8,10));
+    if(!porDia[d]) porDia[d]={count:0, valor:0};
+    const v=parseFloat(l.valorVendido)||0;
+    porDia[d].count++; porDia[d].valor+=v;
+    totCount++; totValor+=v;
+  });
+  const titulo=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const primeiroDow=new Date(y,m-1,1).getDay();
+  const nDias=new Date(y,m,0).getDate();
+  const hoje=new Date(), hojeD=(hoje.getFullYear()===y&&hoje.getMonth()===m-1)?hoje.getDate():0;
+  let cells='';
+  for(let i=0;i<primeiroDow;i++) cells+='<div></div>';
+  for(let d=1;d<=nDias;d++){
+    const x=porDia[d];
+    cells+=`<div class="cal-day${x?' has':''}${d===hojeD?' today':''}">
+      <div class="cal-num">${d}</div>
+      ${x?`<div class="cal-qtd">${x.count} ${x.count===1?'venda':'vendas'}</div><div class="cal-val">${fmCompact(x.valor)}</div>`:''}
+    </div>`;
+  }
+  return `
+    <div class="cal-head">
+      <button class="cal-arrow" onclick="calNav(-1)">‹</button>
+      <div style="text-align:center">
+        <div class="cal-title">${titulo}</div>
+        <div class="cal-sub">${totCount} ${totCount===1?'venda':'vendas'} · ${fm(totValor)}</div>
+      </div>
+      <button class="cal-arrow" onclick="calNav(1)">›</button>
+    </div>
+    <div class="cal-grid">
+      ${['D','S','T','Q','Q','S','S'].map(w=>`<div class="cal-dow">${w}</div>`).join('')}
+      ${cells}
+    </div>`;
 }
 
 // ── RELATÓRIOS ────────────────────────────────────────────
