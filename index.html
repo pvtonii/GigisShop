@@ -280,7 +280,7 @@ document.addEventListener('touchend', function(e){
 }, {passive:false});
 
 // ── STATE ──────────────────────────────────────────────────
-const APP_VERSION = '42';
+const APP_VERSION = '43';
 const APP_VERSION_DATE = 'Nov 1, 2026';
 document.getElementById('verLabel').textContent = 'v'+APP_VERSION;
 let SB_URL = localStorage.getItem('gigi_sb_url') || '';
@@ -298,7 +298,7 @@ let S = {
     statusItem:['Em Estoque','Listado'],
   }
 };
-let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos', invSexo='Todos', gastosFQ='', gastosFSort='recente', relTab='performance', estoqueQ='', relMetricMes='count', relMetricSemana='count', calMes=(d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))(new Date());
+let tab='dashboard', invF='Todos', lstF='Todos', invQ='', lstQ='', invStatus='Todos', invSort='recente', gastosTab='fixos', invSexo='Todos', gastosFQ='', gastosFSort='recente', relTab='performance', estoqueQ='', relMetricMes='count', relMetricSemana='count', relPlatPer='todos', calMes=(d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))(new Date());
 try{ const s=localStorage.getItem(LS); if(s) S=JSON.parse(s); }catch(e){}
 function saveL(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
 
@@ -2160,7 +2160,19 @@ function renderRelPadroes(sold){
     if(v==='U') return 'Unissex';
     return 'Sem sexo';
   });
-  const porPlat=relGroupBy(sold, s=>s.plataforma);
+  // Período do card "Por plataforma": 'todos', 'YYYY' (ano) ou 'YYYY-MM' (mês)
+  const platSold=relPlatPer==='todos'?sold:sold.filter(s=>(s.dataVenda||'').startsWith(relPlatPer));
+  const porPlat=relGroupBy(platSold, s=>s.plataforma);
+  const platTot=platSold.reduce((a,s)=>a+s.vendido,0);
+  const mesesVenda=[...new Set(sold.filter(s=>s.dataVenda).map(s=>s.dataVenda.slice(0,7)))].sort().reverse();
+  const anosVenda=[...new Set(mesesVenda.map(m=>m.slice(0,4)))];
+  const opt=(v,label)=>`<option value="${v}" ${relPlatPer===v?'selected':''}>${label}</option>`;
+  const platSelect=`
+    <select onchange="relPlatPer=this.value;render()" style="width:100%;margin:0 0 10px;padding:7px 10px;font-size:13px">
+      ${opt('todos','Todo período')}
+      ${anosVenda.map(a=>`<optgroup label="${a}">${opt(a,'Ano todo '+a)}${mesesVenda.filter(m=>m.startsWith(a)).map(m=>opt(m,new Date(m+'-15T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}))).join('')}</optgroup>`).join('')}
+    </select>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Total: <b style="color:var(--text)">${fm(platTot)}</b> · ${platSold.length} ${platSold.length===1?'venda':'vendas'}</div>`;
   const porLocal=relGroupBy(sold, s=>s.local);
   const porEstado=relGroupBy(sold, s=>s.estado);
 
@@ -2173,8 +2185,8 @@ function renderRelPadroes(sold){
       relRenderGroupClickable(porSexo,'count','var(--teal-600)','pad_sexo')
     )}
 
-    ${relCard('🛒 Por plataforma', 'Qual plataforma vende mais',
-      relRenderGroupClickable(porPlat,'receita','var(--pink-600)','pad_plat')
+    ${relCard('🛒 Por plataforma', 'Quanto vendeu em cada plataforma · escolha o mês ou ano',
+      platSelect+relRenderGroupClickable(porPlat,'receita','var(--pink-600)','pad_plat')
     )}
 
     ${relCard('📍 Por local de compra', 'Onde você compra mais barato e revende melhor',
